@@ -44,7 +44,7 @@ export function createServer(): McpServer {
     {
       title: "Render Inline Intelligence UI",
       description:
-        "Renders an interactive inline Intelligence UI widget (choices, sliders/calculators, charts, comparisons, checklists, or architecture diagrams) inside MCP Apps-capable chat clients, with Markdown fallback for CLI hosts. Use selectively when interactive controls or structured visual comparison clearly outperform prose.",
+        "Renders an interactive inline Intelligence UI widget (choices, sliders/calculators, charts, comparisons, checklists, architecture diagrams, callouts, grids, tabs, or accordions) inside MCP Apps-capable chat clients, with Markdown fallback for CLI hosts. Use selectively when interactive controls or structured visual comparison clearly outperform prose.",
       inputSchema: UiSpecSchema,
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
@@ -63,10 +63,10 @@ export function createServer(): McpServer {
     {
       title: "Inspect Preset Intelligence UI",
       description:
-        "Renders one of the built-in Intelligence UI showcases (gpu-vram-tuner, runtime-compare, deploy-checklist, mcp-architecture).",
+        "Renders one of the built-in Intelligence UI showcases (gpu-vram-tuner, runtime-compare, deploy-checklist, mcp-architecture, composable-workbench).",
       inputSchema: z.object({
         preset: z
-          .enum(["gpu-vram-tuner", "runtime-compare", "deploy-checklist", "mcp-architecture"])
+          .enum(["gpu-vram-tuner", "runtime-compare", "deploy-checklist", "mcp-architecture", "composable-workbench"])
           .describe("Preset showcase identifier"),
       }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },

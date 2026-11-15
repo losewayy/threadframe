@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Declarative UI specification schema for Intelligence UI.
- * Covers the six primary inline interactive primitives plus progressive streaming tolerance.
+ * Leaf primitives, bounded layout containers, and progressive streaming tolerance.
  */
 
 export const SliderControlSchema = z.object({
@@ -137,13 +137,66 @@ export const ArchitectureBlockSchema = z.object({
   layers: z.array(ArchitectureLayerSchema).min(1),
 });
 
-export const UiBlockSchema = z.discriminatedUnion("kind", [
+export const CalloutBlockSchema = z.object({
+  kind: z.literal("callout"),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  tone: z.enum(["info", "success", "warn"]).optional(),
+  body: z.string(),
+  items: z.array(z.string()).optional(),
+});
+
+export const LeafBlockSchema = z.discriminatedUnion("kind", [
   ChoicesBlockSchema,
   ControlsBlockSchema,
   ChartBlockSchema,
   CompareBlockSchema,
   ChecklistBlockSchema,
   ArchitectureBlockSchema,
+  CalloutBlockSchema,
+]);
+
+// Containers are expanded explicitly so tool JSON Schemas never need recursive refs.
+export const InnerGridBlockSchema = z.object({
+  kind: z.literal("grid"),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  columns: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
+  children: z.array(LeafBlockSchema).min(1),
+});
+export const GridBlockSchema = InnerGridBlockSchema;
+const ContainerChildSchema = z.discriminatedUnion("kind", [
+  ...LeafBlockSchema.options, InnerGridBlockSchema,
+]);
+
+export const TabsBlockSchema = z.object({
+  kind: z.literal("tabs"),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  defaultTab: z.string().optional(),
+  tabs: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    badge: z.string().optional(),
+    children: z.array(ContainerChildSchema).min(1),
+  })).min(1),
+});
+
+export const AccordionBlockSchema = z.object({
+  kind: z.literal("accordion"),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  items: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    summary: z.string().optional(),
+    defaultOpen: z.boolean().optional(),
+    children: z.array(ContainerChildSchema).min(1),
+  })).min(1),
+});
+
+export const UiBlockSchema = z.discriminatedUnion("kind", [
+  ...LeafBlockSchema.options, GridBlockSchema, TabsBlockSchema, AccordionBlockSchema,
 ]);
 
 export const UiActionSchema = z.object({
@@ -163,6 +216,18 @@ export const UiSpecSchema = z.object({
 export type UiSpec = z.infer<typeof UiSpecSchema>;
 export type UiBlock = z.infer<typeof UiBlockSchema>;
 export type ControlItem = z.infer<typeof ControlItemSchema>;
+
+export function walkBlocks(blocks: readonly UiBlock[], visitor: (block: UiBlock) => void): void {
+  for (const block of blocks) {
+    visitor(block);
+    if (block.kind === "grid") walkBlocks(block.children, visitor);
+    else if (block.kind === "tabs") {
+      for (const tab of block.tabs) walkBlocks(tab.children, visitor);
+    } else if (block.kind === "accordion") {
+      for (const item of block.items) walkBlocks(item.children, visitor);
+    }
+  }
+}
 
 export interface PartialUiSpecResult {
   title: string;

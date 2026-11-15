@@ -9,7 +9,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-export function icon(kind: "check" | "arrow" | "replay" | "warning"): SVGSVGElement {
+export function icon(kind: "check" | "arrow" | "replay" | "warning" | "info" | "chevron"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("fill", "none");
@@ -25,7 +25,14 @@ export function icon(kind: "check" | "arrow" | "replay" | "warning"): SVGSVGElem
     arrow: "M12 3v18m-5-5 5 5 5-5",
     replay: "M4 10a8 8 0 1 1 1 7M4 4v6h6",
     warning: "m12 3 10 18H2L12 3Zm0 6v5m0 3v.1",
+    info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 8v6m0-10v.1",
+    chevron: "m9 5 7 7-7 7",
   }[kind]);
   svg.appendChild(path);
   return svg;
+}
+
+let nextId = 0;
+export function uniqueId(prefix: string): string {
+  return `${prefix}-${++nextId}`;
 }

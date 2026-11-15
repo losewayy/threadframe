@@ -1,15 +1,15 @@
 import { evaluateNumericFormula, type VarScope } from "../runtime/formula.js";
-import type { UiBlock, UiSpec } from "./uiSpec.js";
+import { walkBlocks, type UiBlock, type UiSpec } from "./uiSpec.js";
 
 function initialScopeForSpec(spec: Partial<UiSpec>): VarScope {
   const scope: VarScope = {};
-  for (const block of spec.blocks ?? []) {
+  walkBlocks(spec.blocks ?? [], (block) => {
     if (block.kind === "controls") {
       for (const ctrl of block.controls) {
         scope[ctrl.id] = ctrl.defaultValue;
       }
     }
-  }
+  });
   return scope;
 }
 
@@ -20,6 +20,30 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
   }
 
   switch (block.kind) {
+    case "callout": {
+      lines.push(`> [${block.tone ?? "info"}] ${block.body}`);
+      for (const item of block.items ?? []) lines.push(`> - ${item}`);
+      break;
+    }
+    case "grid": {
+      for (const child of block.children) lines.push("", ...formatBlockMarkdown(child, scope));
+      break;
+    }
+    case "tabs": {
+      for (const tab of block.tabs) {
+        lines.push("", `#### [Tab: ${tab.label}]`);
+        for (const child of tab.children) lines.push("", ...formatBlockMarkdown(child, scope));
+      }
+      break;
+    }
+    case "accordion": {
+      for (const item of block.items) {
+        lines.push("", `#### ${item.title}`);
+        if (item.summary) lines.push(item.summary);
+        for (const child of item.children) lines.push("", ...formatBlockMarkdown(child, scope));
+      }
+      break;
+    }
     case "choices": {
       for (const opt of block.options) {
         lines.push(`- **${opt.label}**${opt.description ? `: ${opt.description}` : ""}`);

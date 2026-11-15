@@ -65,6 +65,7 @@
         <option value="runtime-compare">Inference Backend Matrix</option>
         <option value="deploy-checklist">MCP App Release Checklist</option>
         <option value="mcp-architecture">4-Layer Architecture Stack</option>
+        <option value="composable-workbench">Composable Deployment Workbench</option>
       </select>
       <button id="stream-btn" class="primary" type="button">Replay stream</button>
       <button id="theme-btn" type="button">Host Theme: Dark</button>
@@ -227,7 +228,8 @@
       "gpu-vram-tuner": "Help me tune my local model to fit my GPU.",
       "runtime-compare": "Compare the inference backends and help me choose.",
       "deploy-checklist": "What should I check before releasing my MCP app?",
-      "mcp-architecture": "Show me how the MCP app layers fit together."
+      "mcp-architecture": "Show me how the MCP app layers fit together.",
+      "composable-workbench": "Help me plan an inference deployment and check its memory budget."
     };
     document.getElementById("preset-select").addEventListener("change", (event) => {
       document.getElementById("user-prompt").textContent = prompts[event.target.value];

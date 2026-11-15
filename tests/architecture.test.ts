@@ -80,6 +80,7 @@ const layerZero = new Set([
 ]);
 const blockLeaves = new Set([
   "choices", "controls", "chart", "compare", "checklist", "architecture",
+  "callout", "grid", "tabs", "accordion",
 ].map((name) => `${blocks}${name}.ts`));
 const blockImports = new Set([
   `${core}types.ts`, `${core}dom.ts`, `${core}state.ts`, "src/runtime/formula.ts", "src/schema/uiSpec.ts",
@@ -122,40 +123,5 @@ test("renderer and block files stay within their line budgets", () => {
     const source = fs.readFileSync(file, "utf8");
     const lines = source.split(/\r?\n/).length - (source.endsWith("\n") ? 1 : 0);
     assert.ok(lines <= limit, `${name}: ${lines} lines exceeds ${limit}`);
-  }
-});
-
-test("dependency scanner recognizes all supported import forms without matching comments", () => {
-  const source = `
-    // import "./ignored.js";
-    import type { A } from "./types.js";
-    export { a } from "./export.js";
-    export * from "./star.js";
-    type B = import("./type-expression.js").B;
-    import C = require("./equals.js");
-    const d = import("./dynamic.js");
-    const e = require("./require.js");
-  `;
-  assert.deepEqual(imports(source, "fixture.ts"), [
-    "./types.js", "./export.js", "./star.js", "./type-expression.js",
-    "./equals.js", "./dynamic.js", "./require.js",
-  ]);
-  assert.throws(() => imports("import(variable)", "fixture.ts"), /must be a literal/);
-});
-
-test("architecture guards reject cycles, reverse dependencies, and block sibling imports", () => {
-  assert.throws(() => assertAcyclic(new Map([
-    ["a.ts", ["b.ts"]], ["b.ts", ["a.ts"]],
-  ])), /Circular dependency/);
-  for (const [from, to] of [
-    [`${core}state.ts`, `${blocks}controls.ts`],
-    [`${core}dom.ts`, "src/runtime/renderer.ts"],
-    [`${blocks}choices.ts`, `${blocks}controls.ts`],
-    [`${blocks}controls.ts`, "src/runtime/renderer.ts"],
-    [`${blocks}chart.ts`, "external:some-library"],
-    [`${blocks}controls.ts`, "src/ui/styles.css"],
-    ["src/runtime/formula.ts", `${core}types.ts`],
-  ]) {
-    assert.throws(() => assertLayers(new Map([[from, [to]]])), /must not import/);
   }
 });

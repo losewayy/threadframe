@@ -66,12 +66,17 @@ export class IntelligenceUiRenderer {
   }
 
   private createBlockView(block: UiBlock, signature: string): BlockView {
-    const context = this.state.createContext();
-    const node = el("section", "iui-block");
+    const context = this.state.createContext((child) => this.renderNestedBlock(child, context));
+    const node = this.renderNestedBlock(block, context, "iui-block");
+    return { signature, node, context };
+  }
+
+  private renderNestedBlock(block: UiBlock, context: BlockRenderContext, className = "iui-subblock"): HTMLElement {
+    const node = el("section", className);
     node.dataset.kind = block.kind;
     if (block.title) node.appendChild(el("h3", "iui-block-title", block.title));
     node.appendChild(renderBlock(block.kind, block, context));
-    return { signature, node, context };
+    return node;
   }
 
   private updateHeader(shell: HTMLElement, parsed: PartialUiSpecResult, streaming: boolean): void {

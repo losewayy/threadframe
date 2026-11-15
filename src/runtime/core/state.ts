@@ -1,4 +1,4 @@
-import type { UiBlock } from "../../schema/uiSpec.js";
+import { walkBlocks, type UiBlock } from "../../schema/uiSpec.js";
 import type { VarScope } from "../formula.js";
 import type {
   BlockRenderContext, ControlSyncCallback, ReactiveBinding, RendererHostBridge, UiState,
@@ -8,6 +8,9 @@ export class UiStateStore implements UiState {
   readonly scope: VarScope = {};
   readonly checklistState = new Map<string, boolean>();
   readonly selectedChoiceIds = new Set<string>();
+  readonly tabSelections = new Map<string, string>();
+  readonly accordionOpen = new Map<string, boolean>();
+  private readonly containerKeys = new WeakMap<UiBlock, string>();
   selectedNodeId: string | null = null;
   private reactiveBindings: ReactiveBinding[] = [];
   private controlSyncCallbacks: ControlSyncCallback[] = [];
@@ -17,8 +20,14 @@ export class UiStateStore implements UiState {
     private readonly onStatus: (message: string) => void = () => {},
   ) {}
 
-  createContext(): BlockRenderContext {
-    return { state: this, bindings: [], syncControls: [] };
+  createContext(renderChild: (block: UiBlock) => HTMLElement): BlockRenderContext {
+    return { state: this, bindings: [], syncControls: [], renderChild };
+  }
+
+  containerKey(block: UiBlock): string {
+    const key = this.containerKeys.get(block);
+    if (key === undefined) throw new Error("Container defaults must be initialized before rendering");
+    return key;
   }
 
   activateBindings(contexts: readonly BlockRenderContext[]): void {
@@ -37,7 +46,23 @@ export class UiStateStore implements UiState {
   }
 
   initDefaults(blocks: UiBlock[]): void {
-    for (const block of blocks) {
+    let containerIndex = 0;
+    walkBlocks(blocks, (block) => {
+      if (block.kind === "tabs" || block.kind === "accordion") {
+        // Ordinals distinguish anonymous containers while append-only streams keep them stable.
+        const key = JSON.stringify([block.kind, block.id ?? containerIndex]);
+        containerIndex++;
+        this.containerKeys.set(block, key);
+        if (block.kind === "tabs" && !this.tabSelections.has(key)) {
+          const initial = block.tabs.find((tab) => tab.id === block.defaultTab) ?? block.tabs[0];
+          this.tabSelections.set(key, initial.id);
+        } else if (block.kind === "accordion") {
+          for (const item of block.items) {
+            const itemKey = JSON.stringify([key, item.id]);
+            if (!this.accordionOpen.has(itemKey)) this.accordionOpen.set(itemKey, Boolean(item.defaultOpen));
+          }
+        }
+      }
       if (block.kind === "controls") {
         for (const ctrl of block.controls) {
           if (!(ctrl.id in this.scope)) {
@@ -54,7 +79,7 @@ export class UiStateStore implements UiState {
         const firstNode = block.layers[0]?.nodes[0];
         if (firstNode) this.selectedNodeId = firstNode.id;
       }
-    }
+    });
   }
 
   notifyScopeChange(): void {

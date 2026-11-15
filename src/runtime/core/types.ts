@@ -16,7 +16,10 @@ export interface UiState {
   readonly scope: VarScope;
   readonly checklistState: Map<string, boolean>;
   readonly selectedChoiceIds: Set<string>;
+  readonly tabSelections: Map<string, string>;
+  readonly accordionOpen: Map<string, boolean>;
   selectedNodeId: string | null;
+  containerKey(block: UiBlock): string;
   notifyScopeChange(): void;
   setStatus(message: string): void;
   prompt(text: string): boolean;
@@ -26,6 +29,7 @@ export interface BlockRenderContext {
   readonly state: UiState;
   readonly bindings: ReactiveBinding[];
   readonly syncControls: ControlSyncCallback[];
+  readonly renderChild: (block: UiBlock) => HTMLElement;
 }
 
 export type BlockKind = UiBlock["kind"];

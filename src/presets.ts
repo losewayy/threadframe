@@ -1,7 +1,9 @@
 import type { UiSpec } from "./schema/uiSpec.js";
 
+const WORKBENCH_KV = "round(wb_context * wb_batch * (wb_flash ? 0.035 : 0.055), 1)";
+
 /**
- * Built-in presets demonstrating all six Intelligence UI primitives.
+ * Built-in presets demonstrating leaf primitives and bounded composition.
  * Used both by `inspect_preset_ui` and the local interactive Playground.
  */
 export const PRESETS: Record<string, UiSpec> = {
@@ -287,6 +289,112 @@ export const PRESETS: Record<string, UiSpec> = {
         ],
       },
     ],
+  },
+  "composable-workbench": {
+    title: "Inference Deployment Workbench",
+    subtitle: "Tune your memory budget, review readiness, and keep the deployment plan in one place.",
+    badge: "Composable Workspace",
+    blocks: [
+      {
+        kind: "callout",
+        title: "Start with a quantized baseline",
+        tone: "warn",
+        body: "A quantized model leaves room for context and batching on a 12 GB GPU. Keep the estimated total below your memory budget.",
+        items: ["Longer context and more concurrent sequences increase KV cache memory.", "These estimates are planning inputs; verify them with your actual model and workload."],
+      },
+      {
+        kind: "tabs",
+        id: "deployment-views",
+        defaultTab: "budget",
+        tabs: [
+          {
+            id: "budget",
+            label: "Memory budget",
+            badge: "Live",
+            children: [
+              {
+                kind: "grid",
+                columns: 2,
+                children: [
+                  {
+                    kind: "controls",
+                    title: "Runtime parameters",
+                    controls: [
+                      { kind: "slider", id: "wb_context", label: "Context window", min: 4, max: 128, step: 4, defaultValue: 16, unit: "K" },
+                      { kind: "slider", id: "wb_batch", label: "Concurrent sequences", min: 1, max: 8, step: 1, defaultValue: 2 },
+                      { kind: "toggle", id: "wb_flash", label: "KV cache compression", defaultValue: true },
+                    ],
+                    metrics: [
+                      { label: "Estimated total", formula: `round(4.6 + 0.8 + ${WORKBENCH_KV}, 1)`, unit: "GB", precision: 1, warnAbove: 12 },
+                    ],
+                  },
+                  {
+                    kind: "chart",
+                    title: "12 GB memory budget",
+                    mode: "stacked",
+                    max: 12,
+                    unit: "GB",
+                    bars: [
+                      { label: "Model weights", value: 4.6, tone: "primary" },
+                      { label: "KV cache", formula: WORKBENCH_KV, tone: "accent" },
+                      { label: "Runtime overhead", value: 0.8, tone: "success" },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: "readiness",
+            label: "Release readiness",
+            badge: "3 checks",
+            children: [
+              {
+                kind: "checklist",
+                title: "Before deployment",
+                items: [
+                  { id: "wb-budget", label: "Keep the memory estimate within the GPU budget", checked: true },
+                  { id: "wb-workload", label: "Measure throughput with a representative workload" },
+                  { id: "wb-host", label: "Verify the interactive view in the target desktop host" },
+                ],
+              },
+              {
+                kind: "chart",
+                title: "Current estimate",
+                max: 12,
+                unit: "GB",
+                bars: [{ label: "Total memory", formula: `round(4.6 + 0.8 + ${WORKBENCH_KV}, 1)` }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        kind: "accordion",
+        id: "deployment-details",
+        title: "Deployment notes",
+        items: [
+          {
+            id: "optimization",
+            title: "Optimization checklist",
+            summary: "3 steps",
+            defaultOpen: false,
+            children: [
+              {
+                kind: "checklist",
+                items: [
+                  { id: "wb-baseline", label: "Record a baseline with the default context and batch size" },
+                  { id: "wb-change", label: "Change one runtime parameter at a time" },
+                  { id: "wb-headroom", label: "Leave memory headroom for the host and workload peaks" },
+                ],
+              },
+              { kind: "callout", tone: "info", body: "Switching tabs or closing these notes keeps your local parameter values and checklist selections." },
+            ],
+          },
+        ],
+      },
+    ],
+    actions: [{ label: "Use deployment plan", kind: "send_message", promptTemplate: "Use this inference deployment plan: {{state_summary}}" }],
   },
 };
 
