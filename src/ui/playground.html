@@ -66,6 +66,7 @@
         <option value="deploy-checklist">MCP App Release Checklist</option>
         <option value="mcp-architecture">4-Layer Architecture Stack</option>
         <option value="composable-workbench">Composable Deployment Workbench</option>
+        <option value="svg-visual-lab">Vector Visual Lab</option>
       </select>
       <button id="stream-btn" class="primary" type="button">Replay stream</button>
       <button id="theme-btn" type="button">Host Theme: Dark</button>
@@ -229,7 +230,8 @@
       "runtime-compare": "Compare the inference backends and help me choose.",
       "deploy-checklist": "What should I check before releasing my MCP app?",
       "mcp-architecture": "Show me how the MCP app layers fit together.",
-      "composable-workbench": "Help me plan an inference deployment and check its memory budget."
+      "composable-workbench": "Help me plan an inference deployment and check its memory budget.",
+      "svg-visual-lab": "Show me how load and response change the plots and vector diagrams."
     };
     document.getElementById("preset-select").addEventListener("change", (event) => {
       document.getElementById("user-prompt").textContent = prompts[event.target.value];

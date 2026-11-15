@@ -396,6 +396,86 @@ export const PRESETS: Record<string, UiSpec> = {
     ],
     actions: [{ label: "Use deployment plan", kind: "send_message", promptTemplate: "Use this inference deployment plan: {{state_summary}}" }],
   },
+  "svg-visual-lab": {
+    title: "Vector Visual Lab",
+    subtitle: "Explore a response curve, allocation split, and proportional diagrams with the same controls.",
+    badge: "Live Vectors",
+    blocks: [
+      {
+        kind: "controls", title: "Experiment inputs",
+        controls: [
+          { kind: "slider", id: "lab_load", label: "Allocated capacity", min: 0, max: 100, defaultValue: 42, unit: "%" },
+          { kind: "slider", id: "lab_gain", label: "Response gain", min: 1, max: 5, step: 0.25, defaultValue: 2, unit: "×" },
+        ],
+      },
+      {
+        kind: "tabs", id: "vector-views", defaultTab: "response",
+        tabs: [
+          {
+            id: "response", label: "Response & diagram", badge: "Live",
+            children: [{
+              kind: "grid", columns: 2,
+              children: [
+                {
+                  kind: "plot", mode: "line", title: "Response over time",
+                  xLabel: "Time", yLabel: "Response", max: 100,
+                  points: [
+                    { label: "0 s", value: 4 },
+                    { label: "1 s", formula: "round(8 + lab_gain * 2, 1)" },
+                    { label: "2 s", formula: "round(10 + lab_gain * 5 + lab_load * 0.04, 1)" },
+                    { label: "3 s", formula: "round(14 + lab_gain * 6 + lab_load * 0.12, 1)" },
+                    { label: "4 s", formula: "round(18 + lab_gain * 8 + lab_load * 0.18, 1)" },
+                    { label: "5 s", formula: "round(22 + lab_gain * 10 + lab_load * 0.25, 1)" },
+                  ],
+                },
+                {
+                  kind: "svg", title: "Capacity envelope", width: 360, height: 240,
+                  caption: "The split and marker follow allocated capacity. Coordinates stay inside a fixed canvas.",
+                  elements: [
+                    { type: "text", x: 20, y: 36, text: "Available capacity", fontSize: 15 },
+                    { type: "rect", x: 20, y: 68, widthFormula: "3.2 * lab_load", height: 36, rx: 4, fill: "primary" },
+                    { type: "rect", xFormula: "20 + 3.2 * lab_load", y: 68, widthFormula: "320 - 3.2 * lab_load", height: 36, rx: 4, fill: "accent", opacity: 0.5 },
+                    { type: "line", x1Formula: "20 + 3.2 * lab_load", y1: 115, x2Formula: "20 + 3.2 * lab_load", y2: 145, stroke: "muted" },
+                    { type: "circle", cxFormula: "20 + 3.2 * lab_load", cy: 145, r: 5, fill: "accent" },
+                    { type: "path", d: "M20 170 L340 170", stroke: "muted", opacity: 0.3 },
+                    { type: "text", x: 20, y: 212, textFormula: "lab_load", fontSize: 28 },
+                    { type: "text", x: 76, y: 212, text: "% allocated", fill: "muted", fontSize: 12 },
+                  ],
+                },
+              ],
+            }],
+          },
+          {
+            id: "allocation", label: "Allocation", badge: "Share",
+            children: [{
+              kind: "grid", columns: 2,
+              children: [
+                {
+                  kind: "plot", mode: "donut", title: "Capacity allocation", unit: "%",
+                  centerFormula: "lab_load", centerLabel: "Allocated",
+                  points: [
+                    { label: "Allocated", formula: "lab_load", tone: "primary" },
+                    { label: "Available", formula: "100 - lab_load", tone: "accent" },
+                  ],
+                },
+                {
+                  kind: "svg", title: "Load & response", width: 360, height: 240,
+                  caption: "The outer circle follows capacity; the inner circle follows response gain.",
+                  elements: [
+                    { type: "circle", cx: 180, cy: 105, rFormula: "12 + lab_load * 0.45", fill: "accent", opacity: 0.25 },
+                    { type: "circle", cx: 180, cy: 105, rFormula: "8 + lab_gain * 5", fill: "primary" },
+                    { type: "text", x: 180, y: 205, textFormula: "lab_load", textAnchor: "middle", fontSize: 26 },
+                    { type: "text", x: 180, y: 230, text: "Relative load", textAnchor: "middle", fill: "muted", fontSize: 12 },
+                  ],
+                },
+              ],
+            }],
+          },
+        ],
+      },
+    ],
+    actions: [{ label: "Use visual settings", promptTemplate: "Use these visual experiment settings: {{state_summary}}" }],
+  },
 };
 
 export type PresetKey = keyof typeof PRESETS;

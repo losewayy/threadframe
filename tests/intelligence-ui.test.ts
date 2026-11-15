@@ -99,18 +99,99 @@ test("partial streams preserve valid blocks while top-level or nested trailing b
       { kind: "grid", children: [unfinishedControl] },
     ] }],
   };
-  for (const unfinished of [unfinishedControl, unfinishedTabs]) {
+  const unfinishedCanvas = { kind: "svg", width: 120, height: 90, elements: [
+    { type: "rect", width: 20, height: 10 }, { type: "circ" },
+  ] };
+  const unfinishedPlot = { kind: "tabs", tabs: [{ id: "vector", label: "Vector", children: [
+    { kind: "grid", children: [{ kind: "plot", mode: "line", points: [{ label: "Ready", value: 2 }, {}] }] },
+  ] }] };
+  for (const [unfinished, visible] of [
+    [unfinishedControl, ["callout"]], [unfinishedTabs, ["callout"]],
+    [unfinishedCanvas, ["callout", "svg"]], [unfinishedPlot, ["callout", "tabs"]],
+  ] as const) {
     const parsed = parsePartialUiSpec({ title: "Streaming panel", blocks: [note, unfinished] });
     assert.equal(parsed.title, "Streaming panel");
-    assert.deepEqual(parsed.blocks.map((block) => block.kind), ["callout"]);
+    assert.deepEqual(parsed.blocks.map((block) => block.kind), visible);
     assert.equal(parsed.pendingBlockCount, 1);
     assert.equal(parsed.isComplete, false);
+    walkBlocks(parsed.blocks, (block) => {
+      if (block.kind === "plot") assert.equal(block.points.length, 1);
+      if (block.kind === "svg") assert.equal(block.elements.length, 1);
+    });
   }
   const complete = nestedSpec();
   const finished = parsePartialUiSpec({ ...complete, blocks: [note, ...complete.blocks] });
   assert.equal(finished.blocks.length, complete.blocks.length + 1);
   assert.equal(finished.pendingBlockCount, 0);
   assert.equal(finished.isComplete, true);
+});
+
+function vectorSpec() {
+  return UiSpecSchema.parse({
+    title: "Vector experiment",
+    blocks: [
+      { kind: "controls", controls: [{ kind: "slider", id: "gain", label: "Gain", min: 0, max: 20, defaultValue: 13 }] },
+      { kind: "plot", mode: "line", title: "Measured response", xLabel: "Time", yLabel: "Output",
+        points: [{ label: "Input", value: 3, formula: "gain * 3" }, { label: "Baseline", value: 5 }] },
+      { kind: "plot", mode: "donut", centerLabel: "Metric", centerFormula: "gain * 4",
+        points: [{ label: "Allocated", formula: "gain" }, { label: "Remaining", value: 7 }] },
+      { kind: "svg", title: "Capacity drawing", width: 120, height: 90, caption: "Adjusted geometry",
+        elements: [
+          { type: "rect", width: 4, widthFormula: "gain * 2", height: 8, fill: "primary" },
+          { type: "circle", cx: 70, cy: 30, rFormula: "gain / 2", fill: "accent" },
+          { type: "line", x1: 0, y1: 0, x2Formula: "gain + 1", y2: 30, stroke: "muted" },
+          { type: "path", d: "M0 0 L10 10", stroke: "success" },
+          { type: "text", x: 10, y: 80, text: "Waiting", textFormula: "gain * 4" },
+        ],
+      },
+    ],
+  });
+}
+
+test("vector schemas accept supported plots and primitives but reject unsafe attributes and canvas bounds", () => {
+  const valid = vectorSpec();
+  assert.equal(valid.blocks.length, 4);
+  for (const element of [
+    { type: "script", text: "alert(1)" }, { type: "foreignObject" },
+    { type: "rect", width: 10, onclick: "alert(1)" },
+    { type: "text", text: "link", href: "https://example.com" },
+    { type: "circle", r: 4, fill: "url(https://example.com/image)" },
+  ]) {
+    assert.equal(UiSpecSchema.safeParse({ title: "Unsafe vector", blocks: [
+      { kind: "svg", width: 100, height: 80, elements: [element] },
+    ] }).success, false);
+  }
+  for (const [width, height] of [[0, 80], [-1, 80], [100, 0], [100, -1]]) {
+    assert.equal(UiSpecSchema.safeParse({ title: "Invalid canvas", blocks: [
+      { kind: "svg", width, height, elements: [{ type: "rect", width: 10, height: 10 }] },
+    ] }).success, false);
+  }
+  assert.equal(UiSpecSchema.safeParse({ title: "Invalid plot", blocks: [
+    { kind: "plot", mode: "unsupported", points: [{ label: "A", value: 1 }] },
+  ] }).success, false);
+});
+
+test("vector fallback resolves control formulas and degrades unfinished expressions without losing summaries", () => {
+  const spec = vectorSpec();
+  const markdown = renderFallbackMarkdown(spec);
+  for (const text of ["Measured response", "Input", "Metric", "Capacity drawing", "Adjusted geometry", "rect", "circle", "line", "path", "text"]) {
+    assert.ok(markdown.includes(text), `Vector summary missing: ${text}`);
+  }
+  for (const result of [26, 39, 52]) assert.match(markdown, new RegExp(`\\b${result}\\b`));
+  walkBlocks(spec.blocks, (block) => {
+    if (block.kind === "plot") block.points[0].formula = "gain * (";
+    if (block.kind === "svg") {
+      for (const element of block.elements) {
+        if (element.type === "rect") element.widthFormula = "gain * (";
+        if (element.type === "text") element.textFormula = "'unfinished";
+      }
+    }
+  });
+  const fallback = renderFallbackMarkdown(spec);
+  assert.ok(fallback.includes("Waiting"));
+  assert.match(fallback, /\b3\b/);
+  assert.match(fallback, /\b4\b/);
+  assert.ok(!fallback.includes("NaN") && !fallback.includes("undefined"));
 });
 
 test("nested state defaults and container selections survive new streaming objects", () => {
@@ -147,6 +228,7 @@ test("formula evaluator returns null / fallback cleanly on malformed partial str
 
 test("all built-in presets conform to UiSpecSchema and render non-empty Markdown fallback", () => {
   assert.ok(PRESETS["composable-workbench"]);
+  assert.ok(PRESETS["svg-visual-lab"]);
   for (const [key, spec] of Object.entries(PRESETS)) {
     const validated = UiSpecSchema.parse(spec);
     assert.ok(validated.blocks.length >= 1, `${key} should have at least one block`);

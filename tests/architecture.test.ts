@@ -77,13 +77,16 @@ const core = "src/runtime/core/";
 const blocks = "src/runtime/blocks/";
 const layerZero = new Set([
   "src/schema/uiSpec.ts", "src/schema/fallback.ts", "src/runtime/formula.ts", "src/presets.ts",
+  "src/schema/vector.ts", "src/runtime/vector.ts",
 ]);
 const blockLeaves = new Set([
   "choices", "controls", "chart", "compare", "checklist", "architecture",
   "callout", "grid", "tabs", "accordion",
+  "plot", "svg",
 ].map((name) => `${blocks}${name}.ts`));
 const blockImports = new Set([
   `${core}types.ts`, `${core}dom.ts`, `${core}state.ts`, "src/runtime/formula.ts", "src/schema/uiSpec.ts",
+  `${core}svg.ts`, "src/runtime/vector.ts",
 ]);
 
 function assertLayers(dependencies: ReadonlyMap<string, readonly string[]>): void {

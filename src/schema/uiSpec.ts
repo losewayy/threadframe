@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { PlotBlockSchema, PlotPointSchema, SvgBlockSchema, SvgElementSchema } from "./vector.js";
+export { PlotBlockSchema, SvgBlockSchema } from "./vector.js";
 
 /**
  * Declarative UI specification schema for Intelligence UI.
@@ -154,6 +156,8 @@ export const LeafBlockSchema = z.discriminatedUnion("kind", [
   ChecklistBlockSchema,
   ArchitectureBlockSchema,
   CalloutBlockSchema,
+  PlotBlockSchema,
+  SvgBlockSchema,
 ]);
 
 // Containers are expanded explicitly so tool JSON Schemas never need recursive refs.
@@ -239,6 +243,33 @@ export interface PartialUiSpecResult {
   isComplete: boolean;
 }
 
+function partialVectorChildren(raw: unknown, depth = 0): { value: unknown; pending: boolean } {
+  if (!raw || typeof raw !== "object" || depth > 2) return { value: raw, pending: false };
+  const block = raw as Record<string, unknown>;
+  if (block.kind === "plot" || block.kind === "svg") {
+    const field = block.kind === "plot" ? "points" : "elements";
+    const children = block[field];
+    if (!Array.isArray(children)) return { value: raw, pending: false };
+    const schema = block.kind === "plot" ? PlotPointSchema : SvgElementSchema;
+    const valid = children.filter((child) => schema.safeParse(child).success);
+    return { value: { ...block, [field]: valid }, pending: valid.length < children.length };
+  }
+  let pending = false;
+  const children = (items: unknown) => Array.isArray(items) ? items.map((item) => {
+    const parsed = partialVectorChildren(item, depth + 1);
+    pending ||= parsed.pending;
+    return parsed.value;
+  }) : items;
+  let value: unknown = raw;
+  if (block.kind === "grid") value = { ...block, children: children(block.children) };
+  else if (block.kind === "tabs" || block.kind === "accordion") {
+    const field = block.kind === "tabs" ? "tabs" : "items";
+    if (Array.isArray(block[field])) value = { ...block, [field]: block[field].map((item) =>
+      item && typeof item === "object" ? { ...item, children: children(item.children) } : item) };
+  }
+  return { value, pending };
+}
+
 /**
  * Parses a potentially incomplete healed JSON object emitted by `ui/notifications/tool-input-partial`.
  * Fully valid blocks render immediately while trailing half-streamed blocks show as a skeleton count.
@@ -272,9 +303,11 @@ export function parsePartialUiSpec(raw: unknown): PartialUiSpecResult {
   let pendingBlockCount = 0;
   if (Array.isArray(record.blocks)) {
     for (const item of record.blocks) {
-      const parsed = UiBlockSchema.safeParse(item);
+      const partial = partialVectorChildren(item);
+      const parsed = UiBlockSchema.safeParse(partial.value);
       if (parsed.success) {
         validBlocks.push(parsed.data);
+        if (partial.pending) pendingBlockCount++;
       } else {
         pendingBlockCount++;
       }

@@ -1,0 +1,86 @@
+.iui-vector-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  overflow: hidden;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.iui-svg-figure {
+  min-width: 0;
+  margin: 0;
+}
+
+.iui-vector-caption {
+  margin-top: 10px;
+  color: var(--iui-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.iui-plot text {
+  fill: var(--iui-muted);
+  font-size: 12px;
+}
+
+.iui-plot-reference {
+  stroke: var(--iui-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.iui-plot-y-tick {
+  text-anchor: end;
+}
+
+.iui-plot-axis-label {
+  text-anchor: middle;
+}
+
+.iui-plot-axis-label.y {
+  text-anchor: start;
+}
+
+.iui-plot-area {
+  fill: var(--iui-chart-primary);
+  fill-opacity: 0.1;
+}
+
+.iui-plot-line {
+  fill: none;
+  stroke: var(--iui-chart-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.iui-plot-dot {
+  stroke: var(--iui-surface);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.iui-donut-track,
+.iui-donut-segment {
+  fill: none;
+  stroke-width: 22;
+}
+
+.iui-donut-track {
+  stroke: var(--iui-border);
+}
+
+.iui-plot .iui-donut-total {
+  fill: var(--iui-text);
+  font-size: 24px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.iui-donut-label {
+  text-anchor: middle;
+}

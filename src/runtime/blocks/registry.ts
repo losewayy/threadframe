@@ -9,6 +9,8 @@ import { renderCallout } from "./callout.js";
 import { renderGrid } from "./grid.js";
 import { renderTabs } from "./tabs.js";
 import { renderAccordion } from "./accordion.js";
+import { renderPlot } from "./plot.js";
+import { renderSvg } from "./svg.js";
 
 const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   choices: renderChoices,
@@ -21,6 +23,8 @@ const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   grid: renderGrid,
   tabs: renderTabs,
   accordion: renderAccordion,
+  plot: renderPlot,
+  svg: renderSvg,
 };
 
 export function renderBlock<K extends BlockKind>(
