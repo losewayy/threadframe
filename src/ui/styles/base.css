@@ -1,0 +1,368 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--iui-line) transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--background, var(--iui-canvas));
+  color: var(--iui-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--iui-accent);
+  outline-offset: 3px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.iui-shell {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.iui-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--iui-card-border);
+}
+
+.iui-header > div:first-child {
+  min-width: 0;
+}
+
+.iui-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -.035em;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.iui-subtitle {
+  margin: 7px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--iui-muted);
+}
+
+.iui-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  max-width: 170px;
+  flex-shrink: 0;
+}
+
+.iui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--iui-border);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 550;
+  color: var(--iui-muted);
+  white-space: nowrap;
+  background: var(--iui-surface);
+}
+
+.iui-dot {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--iui-success);
+}
+
+.iui-dot.streaming {
+  background: var(--iui-accent);
+  animation: iuiPulse 1.8s ease-in-out infinite;
+}
+
+.iui-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.iui-block {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--iui-card-border);
+  border-radius: 12px;
+  background: var(--iui-surface);
+  animation: iuiEnter 480ms var(--iui-ease) both;
+}
+
+.iui-block-title {
+  margin: 0 0 15px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.iui-choice-btn, .iui-arch-node {
+  position: relative;
+  min-width: 0;
+  text-align: left;
+  padding: 13px;
+  border: 1px solid var(--iui-border);
+  border-radius: 9px;
+  background: var(--iui-surface);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 160ms, transform 220ms var(--iui-ease), box-shadow 160ms;
+}
+
+.iui-choice-btn:hover, .iui-arch-node:hover {
+  border-color: var(--iui-muted);
+  background: var(--iui-surface-alt);
+  transform: translateY(-2px);
+  box-shadow: var(--iui-shadow);
+}
+
+.iui-choice-btn.active, .iui-arch-node.selected {
+  border-color: var(--iui-primary);
+  background: color-mix(in srgb, var(--iui-primary) 5%, var(--iui-surface));
+  box-shadow: inset 0 0 0 .5px var(--iui-primary);
+}
+
+.active .iui-choice-check {
+  background: var(--iui-primary);
+  border-color: var(--iui-primary);
+}
+
+.active .iui-choice-check .iui-icon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.iui-choice-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.iui-choice-desc {
+  display: block;
+  font-size: 11px;
+  color: var(--iui-muted);
+  margin-top: 5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.iui-control {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.iui-control-top, .iui-bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.iui-control-val {
+  text-align: right;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.iui-skeleton {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid var(--iui-card-border);
+  border-radius: 12px;
+  background: var(--iui-surface);
+}
+
+.iui-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 20%, color-mix(in srgb, var(--iui-muted) 10%, transparent) 48%, transparent 75%);
+  transform: translateX(-100%);
+  animation: iuiShimmer 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.iui-skeleton-line {
+  display: block;
+  width: 52%;
+  height: 8px;
+  margin-bottom: 10px;
+  border-radius: 3px;
+  background: var(--iui-surface-alt);
+}
+
+.iui-skeleton-line.short {
+  width: 32%;
+}
+
+.iui-skeleton-caption {
+  color: var(--iui-muted);
+  font-size: 10px;
+}
+
+.iui-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.iui-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--iui-primary);
+  border-radius: 7px;
+  background: var(--iui-primary);
+  color: var(--iui-primary-fg);
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: opacity 150ms, transform 150ms;
+}
+
+.iui-action-btn:hover {
+  opacity: .82;
+}
+
+.iui-action-btn:active {
+  transform: translateY(1px);
+}
+
+.iui-action-btn.secondary {
+  background: transparent;
+  color: var(--iui-muted);
+  border-color: transparent;
+  padding: 3px;
+  font-size: 10px;
+}
+
+.iui-action-btn.secondary .iui-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.iui-status {
+  color: var(--iui-muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.iui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes iuiPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .25;
+  }
+}
+
+@keyframes iuiEnter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes iuiShimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 480px) {
+  .iui-shell {
+    padding: 14px;
+    gap: 12px;
+  }
+  .iui-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .iui-header-meta {
+    max-width: none;
+    justify-content: flex-start;
+  }
+  .iui-title {
+    font-size: 18px;
+  }
+  .iui-block {
+    padding: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

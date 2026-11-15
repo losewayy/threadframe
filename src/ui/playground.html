@@ -3,142 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Intelligence UI · MCP Apps Stream Simulator</title>
+  <title>Intelligence UI · Playground</title>
   <style>
-    :root {
-      --pg-bg: #0e1116;
-      --pg-panel: #151a23;
-      --pg-border: rgba(226, 232, 240, 0.14);
-      --pg-text: #f1f5f9;
-      --pg-muted: #94a3b8;
-      --pg-accent: #3b82f6;
-    }
+    :root { color-scheme: dark; --pg-bg: #1b1c1c; --pg-panel: #242626; --pg-soft: #2e3130; --pg-border: #404341; --pg-text: #eceeea; --pg-muted: #b0b6b1; --pg-button: #e1e5df; --pg-button-text: #252a26; --pg-focus: #9cafda; --pg-success: #8abca3; }
+    :root:has(.light-host) { color-scheme: light; --pg-bg: #f7f7f6; --pg-panel: #fff; --pg-soft: #f1f1ef; --pg-border: #dedfdb; --pg-text: #292a28; --pg-muted: #686b65; --pg-button: #343832; --pg-button-text: #fff; --pg-focus: #526a9b; --pg-success: #32775e; }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 24px;
-      background: var(--pg-bg);
-      color: var(--pg-text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 13px;
-    }
-    .wrap {
-      max-width: 1120px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
-      gap: 18px;
-    }
-    @media (max-width: 900px) {
-      .wrap { grid-template-columns: 1fr; }
-    }
-    .panel {
-      background: var(--pg-panel);
-      border: 1px solid var(--pg-border);
-      border-radius: 12px;
-      padding: 16px;
-    }
-    .top {
-      max-width: 1120px;
-      margin: 0 auto 16px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    h1 { margin: 0; font-size: 18px; font-weight: 650; }
-    .sub { margin: 3px 0 0; color: var(--pg-muted); font-size: 12px; }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-    select, button {
-      background: #1d2430;
-      color: var(--pg-text);
-      border: 1px solid var(--pg-border);
-      border-radius: 8px;
-      padding: 7px 11px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    button.primary {
-      background: var(--pg-accent);
-      border-color: var(--pg-accent);
-      color: #fff;
-      font-weight: 600;
-    }
-    .chat-bubble {
-      border: 1px solid var(--pg-border);
-      border-radius: 12px;
-      padding: 12px;
-      background: #0b0e13;
-    }
-    .chat-bubble.light-host {
-      background: #ffffff;
-      color: #0f172a;
-    }
-    iframe {
-      width: 100%;
-      min-height: 360px;
-      border: 0;
-      display: block;
-      background: transparent;
-    }
-    .log-box {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      color: var(--pg-muted);
-      max-height: 460px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .label {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--pg-muted);
-      margin: 0 0 10px;
-    }
+    html { scrollbar-gutter: stable; }
+    body { margin: 0; background: var(--pg-bg); color: var(--pg-text); font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+    button, select { font: inherit; }
+    button, select, summary { cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--pg-focus); outline-offset: 4px; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 28px; border-bottom: 1px solid var(--pg-border); }
+    .brand { display: flex; align-items: center; gap: 11px; }
+    .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--pg-border); border-radius: 8px; font-size: 17px; }
+    h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.02em; }
+    .sub { margin: 0; font-size: 11px; color: var(--pg-muted); }
+    [data-pg-icon] svg { width: 17px; height: 17px; }
+    .environment { color: var(--pg-muted); font-size: 11px; display: flex; align-items: center; gap: 7px; }
+    .environment::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--pg-success); }
+    .workspace { max-width: 1220px; margin: 0 auto; padding: 28px; }
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+    .toolbar label { font-size: 11px; color: var(--pg-muted); margin-right: 4px; }
+    select, button { min-height: 34px; border: 1px solid var(--pg-border); border-radius: 7px; background: var(--pg-panel); color: var(--pg-text); padding: 6px 11px; font-size: 11px; }
+    select { max-width: 100%; }
+    button:hover { background: var(--pg-soft); }
+    button.primary { background: var(--pg-button); color: var(--pg-button-text); border-color: var(--pg-button); font-weight: 550; }
+    #theme-btn { margin-left: auto; }
+    .wrap { display: grid; grid-template-columns: minmax(0, 760px) minmax(240px, 1fr); gap: 28px; align-items: start; }
+    .wrap:has(.traffic:not([open])) { grid-template-columns: minmax(0, 760px) minmax(160px, 1fr); }
+    .thread { min-width: 0; }
+    .thread-heading { margin: 0 0 24px; color: var(--pg-muted); font-size: 11px; font-weight: 400; }
+    .user-message { margin: 0 0 25px auto; width: fit-content; max-width: 85%; padding: 11px 16px; background: var(--pg-soft); border-radius: 14px 14px 4px 14px; font-size: 12px; }
+    .assistant-heading { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; margin-bottom: 10px; }
+    .assistant-mark { width: 23px; height: 23px; display: grid; place-items: center; border: 1px solid var(--pg-border); border-radius: 50%; font-size: 14px; }
+    .assistant-intro { margin: 0 0 16px; font-size: 12px; color: var(--pg-muted); }
+    .chat-bubble { border: 1px solid var(--pg-border); border-radius: 14px; background: var(--pg-panel); overflow: hidden; box-shadow: 0 4px 20px #00000008; }
+    iframe { width: 100%; min-height: 360px; border: 0; display: block; background: transparent; }
+    .thread-note { display: flex; align-items: center; gap: 7px; margin: 12px 0 0; color: var(--pg-muted); font-size: 10px; }
+    .thread-note::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--pg-success); }
+    .traffic { min-width: 0; position: sticky; top: 22px; padding: 0 0 0 20px; border-left: 1px solid var(--pg-border); }
+    summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 550; list-style: none; padding: 0 0 12px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--pg-muted); font-size: 16px; font-weight: 400; }
+    details[open] summary::after { content: "−"; }
+    .traffic-caption { margin: 0 0 16px; font-size: 10px; color: var(--pg-muted); }
+    .log-box { max-height: 650px; overflow-y: auto; scrollbar-gutter: stable; padding-right: 8px; color: var(--pg-muted); font: 10px/1.9 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin; }
+    @media (max-width: 960px) { .wrap, .wrap:has(.traffic:not([open])) { grid-template-columns: minmax(0, 760px); justify-content: center; } .traffic { position: static; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--pg-border); } .log-box { max-height: 260px; } }
+    @media (max-width: 540px) { .top { padding: 14px 16px; } .workspace { padding: 18px 12px; } .environment { display: none; } .toolbar { gap: 7px; margin-bottom: 22px; } .toolbar label { display: none; } select { width: 100%; } #theme-btn { margin-left: 0; } .user-message { max-width: 92%; } }
   </style>
 </head>
 <body>
   <header class="top">
-    <div>
-      <h1>Intelligence UI · MCP Apps Stream Playground</h1>
-      <p class="sub">Real sandboxed iframe speaking MCP Apps JSON-RPC (<code>ui/initialize</code>, <code>tool-input-partial</code>, <code>tool-result</code>, <code>ui/message</code>).</p>
-    </div>
-    <div class="toolbar">
-      <select id="preset-select">
-        <option value="gpu-vram-tuner">Preset: GPU VRAM &amp; Throughput Tuner</option>
-        <option value="runtime-compare">Preset: Inference Backend Matrix</option>
-        <option value="deploy-checklist">Preset: MCP App Release Checklist</option>
-        <option value="mcp-architecture">Preset: 4-Layer Architecture Stack</option>
+    <div class="brand"><span class="brand-mark" data-pg-icon aria-hidden="true"></span><div><h1>Intelligence UI</h1><p class="sub">Playground</p></div></div>
+    <span class="environment">Local sandbox</span>
+  </header>
+  <div class="workspace">
+    <div class="toolbar" role="group" aria-label="Preview settings">
+      <label for="preset-select">Scenario</label>
+      <select id="preset-select" aria-label="Scenario">
+        <option value="gpu-vram-tuner">GPU VRAM &amp; Throughput Tuner</option>
+        <option value="runtime-compare">Inference Backend Matrix</option>
+        <option value="deploy-checklist">MCP App Release Checklist</option>
+        <option value="mcp-architecture">4-Layer Architecture Stack</option>
       </select>
-      <button id="stream-btn" class="primary" type="button">Simulate Partial Stream</button>
+      <button id="stream-btn" class="primary" type="button">Replay stream</button>
       <button id="theme-btn" type="button">Host Theme: Dark</button>
     </div>
-  </header>
-
-  <main class="wrap">
-    <section class="panel">
-      <p class="label">Simulated Desktop Chat Thread (Inline Sandboxed Iframe)</p>
-      <div id="bubble" class="chat-bubble">
-        <iframe id="host-frame" sandbox="allow-scripts" src="/view"></iframe>
-      </div>
-    </section>
-
-    <section class="panel">
-      <p class="label">JSON-RPC 2.0 Bridge Traffic</p>
-      <div id="rpc-log" class="log-box"></div>
-    </section>
-  </main>
-
+    <main class="wrap">
+      <section class="thread" aria-label="Desktop chat preview">
+        <h2 class="thread-heading">Desktop chat preview</h2>
+        <div class="user-message" id="user-prompt">Help me tune my local model to fit my GPU.</div>
+        <div class="assistant-heading"><span class="assistant-mark" data-pg-icon aria-hidden="true"></span>Assistant</div>
+        <p class="assistant-intro">Here's an interactive view. Explore the options below.</p>
+        <div id="bubble" class="chat-bubble">
+          <iframe id="host-frame" title="Interactive Intelligence UI" sandbox="allow-scripts" src="/view"></iframe>
+        </div>
+        <p class="thread-note">Interactive preview · Changes stay in this session</p>
+      </section>
+      <details class="traffic" open>
+        <summary>Bridge activity</summary>
+        <p class="traffic-caption">JSON-RPC 2.0 · Latest messages first</p>
+        <div id="rpc-log" class="log-box" aria-label="JSON-RPC bridge traffic"></div>
+      </details>
+    </main>
+  </div>
   <script>
     const frame = document.getElementById("host-frame");
     const bubble = document.getElementById("bubble");
@@ -216,7 +164,7 @@
       if (!msg || typeof msg !== "object") return;
 
       if (msg.method === "ui/notifications/size-changed" && msg.params && typeof msg.params.height === "number") {
-        frame.style.height = Math.max(240, Math.min(800, msg.params.height + 8)) + "px";
+        frame.style.height = Math.max(240, Math.ceil(msg.params.height) + 4) + "px";
         return;
       }
 
@@ -262,6 +210,28 @@
         presetsData = data;
         if (frameReady) runStreamSimulation(presetSelect.value);
       });
+  </script>
+  <script>
+    document.querySelectorAll("[data-pg-icon]").forEach((container) => {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "1.5");
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", "m12 3 3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z");
+      svg.appendChild(path);
+      container.appendChild(svg);
+    });
+    const prompts = {
+      "gpu-vram-tuner": "Help me tune my local model to fit my GPU.",
+      "runtime-compare": "Compare the inference backends and help me choose.",
+      "deploy-checklist": "What should I check before releasing my MCP app?",
+      "mcp-architecture": "Show me how the MCP app layers fit together."
+    };
+    document.getElementById("preset-select").addEventListener("change", (event) => {
+      document.getElementById("user-prompt").textContent = prompts[event.target.value];
+    });
   </script>
 </body>
 </html>

@@ -1,0 +1,83 @@
+:root {
+  color-scheme: light;
+  --iui-canvas: #f7f7f6;
+  --iui-base: #ffffff;
+  --iui-raised: #f1f1ef;
+  --iui-line: #dedfdb;
+  --iui-outline: #90958c;
+  --iui-groove: #d4d8d1;
+  --iui-thumb: #ffffff;
+  --iui-ink: #292a28;
+  --iui-dim: #686b65;
+  --iui-key: #343832;
+  --iui-key-fg: #ffffff;
+  --iui-blue: #526a9b;
+  --iui-plot: #56789b;
+  --iui-violet: #8d779f;
+  --iui-green: #32775e;
+  --iui-amber: #96601c;
+  --iui-shadow: 0 1px 3px #20281c0c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --iui-canvas: #1b1c1c;
+    --iui-base: #242626;
+    --iui-raised: #2e3130;
+    --iui-line: #404341;
+    --iui-outline: #808c83;
+    --iui-groove: #4b554e;
+    --iui-thumb: #f0f3ed;
+    --iui-ink: #eceeea;
+    --iui-dim: #b0b6b1;
+    --iui-key: #e1e5df;
+    --iui-key-fg: #252a26;
+    --iui-blue: #9cafda;
+    --iui-plot: #8ca9c8;
+    --iui-violet: #baa4cc;
+    --iui-green: #8abca3;
+    --iui-amber: #e2b77d;
+    --iui-shadow: 0 2px 5px #00000024;
+  }
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --iui-canvas: #1b1c1c;
+  --iui-base: #242626;
+  --iui-raised: #2e3130;
+  --iui-line: #404341;
+  --iui-outline: #808c83;
+  --iui-groove: #4b554e;
+  --iui-thumb: #f0f3ed;
+  --iui-ink: #eceeea;
+  --iui-dim: #b0b6b1;
+  --iui-key: #e1e5df;
+  --iui-key-fg: #252a26;
+  --iui-blue: #9cafda;
+  --iui-plot: #8ca9c8;
+  --iui-violet: #baa4cc;
+  --iui-green: #8abca3;
+  --iui-amber: #e2b77d;
+  --iui-shadow: 0 2px 5px #00000024;
+}
+
+:root {
+  --iui-surface: var(--card, var(--iui-base));
+  --iui-surface-alt: var(--secondary, var(--iui-raised));
+  --iui-border: var(--border, var(--iui-line));
+  --iui-card-border: var(--card-border, var(--iui-border));
+  --iui-text: var(--foreground, var(--iui-ink));
+  --iui-muted: var(--muted-foreground, var(--iui-dim));
+  --iui-primary: var(--primary, var(--iui-key));
+  --iui-primary-fg: var(--primary-foreground, var(--iui-key-fg));
+  --iui-accent: var(--primary, var(--iui-blue));
+  --iui-chart-primary: var(--chart-1, var(--iui-plot));
+  --iui-chart-secondary: var(--chart-2, var(--iui-violet));
+  --iui-control-border: var(--border, var(--iui-outline));
+  --iui-track: var(--secondary, var(--iui-groove));
+  --iui-success: var(--success, var(--iui-green));
+  --iui-warn: var(--warning, var(--iui-amber));
+  --iui-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
