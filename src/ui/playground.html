@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intelligence UI · MCP Apps Stream Simulator</title>
+  <style>
+    :root {
+      --pg-bg: #0e1116;
+      --pg-panel: #151a23;
+      --pg-border: rgba(226, 232, 240, 0.14);
+      --pg-text: #f1f5f9;
+      --pg-muted: #94a3b8;
+      --pg-accent: #3b82f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--pg-bg);
+      color: var(--pg-text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+      gap: 18px;
+    }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--pg-panel);
+      border: 1px solid var(--pg-border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .top {
+      max-width: 1120px;
+      margin: 0 auto 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    h1 { margin: 0; font-size: 18px; font-weight: 650; }
+    .sub { margin: 3px 0 0; color: var(--pg-muted); font-size: 12px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    select, button {
+      background: #1d2430;
+      color: var(--pg-text);
+      border: 1px solid var(--pg-border);
+      border-radius: 8px;
+      padding: 7px 11px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--pg-accent);
+      border-color: var(--pg-accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    .chat-bubble {
+      border: 1px solid var(--pg-border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #0b0e13;
+    }
+    .chat-bubble.light-host {
+      background: #ffffff;
+      color: #0f172a;
+    }
+    iframe {
+      width: 100%;
+      min-height: 360px;
+      border: 0;
+      display: block;
+      background: transparent;
+    }
+    .log-box {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--pg-muted);
+      max-height: 460px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--pg-muted);
+      margin: 0 0 10px;
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Intelligence UI · MCP Apps Stream Playground</h1>
+      <p class="sub">Real sandboxed iframe speaking MCP Apps JSON-RPC (<code>ui/initialize</code>, <code>tool-input-partial</code>, <code>tool-result</code>, <code>ui/message</code>).</p>
+    </div>
+    <div class="toolbar">
+      <select id="preset-select">
+        <option value="gpu-vram-tuner">Preset: GPU VRAM &amp; Throughput Tuner</option>
+        <option value="runtime-compare">Preset: Inference Backend Matrix</option>
+        <option value="deploy-checklist">Preset: MCP App Release Checklist</option>
+        <option value="mcp-architecture">Preset: 4-Layer Architecture Stack</option>
+      </select>
+      <button id="stream-btn" class="primary" type="button">Simulate Partial Stream</button>
+      <button id="theme-btn" type="button">Host Theme: Dark</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel">
+      <p class="label">Simulated Desktop Chat Thread (Inline Sandboxed Iframe)</p>
+      <div id="bubble" class="chat-bubble">
+        <iframe id="host-frame" sandbox="allow-scripts" src="/view"></iframe>
+      </div>
+    </section>
+
+    <section class="panel">
+      <p class="label">JSON-RPC 2.0 Bridge Traffic</p>
+      <div id="rpc-log" class="log-box"></div>
+    </section>
+  </main>
+
+  <script>
+    const frame = document.getElementById("host-frame");
+    const bubble = document.getElementById("bubble");
+    const presetSelect = document.getElementById("preset-select");
+    const streamBtn = document.getElementById("stream-btn");
+    const themeBtn = document.getElementById("theme-btn");
+    const logEl = document.getElementById("rpc-log");
+
+    let hostTheme = "dark";
+    let frameReady = false;
+    let presetsData = {};
+    let activeTimers = [];
+
+    function logRpc(dir, payload) {
+      const line = "[" + dir + "] " + JSON.stringify(payload).slice(0, 220);
+      logEl.textContent = line + "\n" + logEl.textContent;
+    }
+
+    function postToFrame(msg) {
+      frame.contentWindow.postMessage(msg, "*");
+      logRpc("HOST -> VIEW", msg);
+    }
+
+    function clearTimers() {
+      activeTimers.forEach(clearTimeout);
+      activeTimers = [];
+    }
+
+    function runStreamSimulation(key) {
+      const spec = presetsData[key];
+      if (!spec || !frameReady) return;
+      clearTimers();
+
+      const steps = spec.blocks.length;
+      postToFrame({
+        jsonrpc: "2.0",
+        method: "ui/notifications/tool-input-partial",
+        params: { arguments: { title: spec.title, subtitle: spec.subtitle, badge: spec.badge, blocks: [] } }
+      });
+
+      for (let i = 1; i <= steps; i++) {
+        const t = setTimeout(() => {
+          const partialArgs = {
+            title: spec.title,
+            subtitle: spec.subtitle,
+            badge: spec.badge,
+            blocks: spec.blocks.slice(0, i)
+          };
+          if (i < steps) {
+            postToFrame({
+              jsonrpc: "2.0",
+              method: "ui/notifications/tool-input-partial",
+              params: { arguments: partialArgs }
+            });
+          } else {
+            postToFrame({
+              jsonrpc: "2.0",
+              method: "ui/notifications/tool-input",
+              params: { arguments: spec }
+            });
+            postToFrame({
+              jsonrpc: "2.0",
+              method: "ui/notifications/tool-result",
+              params: { structuredContent: spec }
+            });
+          }
+        }, i * 520);
+        activeTimers.push(t);
+      }
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.source !== frame.contentWindow) return;
+      const msg = event.data;
+      if (!msg || typeof msg !== "object") return;
+
+      if (msg.method === "ui/notifications/size-changed" && msg.params && typeof msg.params.height === "number") {
+        frame.style.height = Math.max(240, Math.min(800, msg.params.height + 8)) + "px";
+        return;
+      }
+
+      logRpc("VIEW -> HOST", msg);
+
+      if (msg.method === "ui/initialize" && msg.id !== undefined) {
+        postToFrame({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: {
+            protocolVersion: "2026-01-26",
+            hostInfo: { name: "intelligence-ui-playground", version: "0.1.0" },
+            hostCapabilities: { openLinks: {}, message: { text: {} } },
+            hostContext: { theme: hostTheme }
+          }
+        });
+      } else if (msg.method === "ui/notifications/initialized") {
+        frameReady = true;
+        runStreamSimulation(presetSelect.value);
+      } else if (msg.method === "ui/message" && msg.id !== undefined) {
+        postToFrame({ jsonrpc: "2.0", id: msg.id, result: {} });
+      }
+    });
+
+    streamBtn.addEventListener("click", () => runStreamSimulation(presetSelect.value));
+    presetSelect.addEventListener("change", () => runStreamSimulation(presetSelect.value));
+    themeBtn.addEventListener("click", () => {
+      hostTheme = hostTheme === "dark" ? "light" : "dark";
+      themeBtn.textContent = "Host Theme: " + (hostTheme === "dark" ? "Dark" : "Light");
+      bubble.classList.toggle("light-host", hostTheme === "light");
+      if (frameReady) {
+        postToFrame({
+          jsonrpc: "2.0",
+          method: "ui/notifications/host-context-changed",
+          params: { theme: hostTheme }
+        });
+      }
+    });
+
+    fetch("/presets.json")
+      .then((r) => r.json())
+      .then((data) => {
+        presetsData = data;
+        if (frameReady) runStreamSimulation(presetSelect.value);
+      });
+  </script>
+</body>
+</html>

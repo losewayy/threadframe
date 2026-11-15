@@ -1,0 +1,50 @@
+{
+  "name": "intelligence-ui",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Open-source streaming Intelligence UI runtime and MCP Apps server for inline interactive agent interfaces",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/losewayy/intelligence-ui.git"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-apps",
+    "generative-ui",
+    "ai-ui",
+    "streaming-ui",
+    "agent-ui"
+  ],
+  "bin": {
+    "intelligence-ui": "./dist/main.js"
+  },
+  "scripts": {
+    "build:ui": "cross-env INPUT=mcp-app.html vite build",
+    "build": "tsc --noEmit && tsc -p tsconfig.server.json && pnpm run build:ui",
+    "dev:ui": "cross-env NODE_ENV=development INPUT=mcp-app.html vite build --watch",
+    "dev": "tsx main.ts",
+    "start": "pnpm run build && node dist/main.js",
+    "start:stdio": "node dist/main.js --stdio",
+    "test": "tsx --test tests/intelligence-ui.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/express": "2.0.0",
+    "@modelcontextprotocol/ext-apps": "^2.1.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/node": "22.19.5",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
