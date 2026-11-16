@@ -221,7 +221,7 @@ export const PRESETS: Record<string, UiSpec> = {
     ],
   },
   "mcp-architecture": {
-    title: "Intelligence UI Execution Pipeline",
+    title: "ThreadFrame Execution Pipeline",
     subtitle: "Click any node to inspect how streaming UI crosses host sandboxes.",
     badge: "Exploded Stack",
     blocks: [
@@ -237,7 +237,7 @@ export const PRESETS: Record<string, UiSpec> = {
                 label: "LLM Tool Call",
                 role: "Streaming JSON Args",
                 badge: "MCP",
-                detail: "Model invokes render_intelligence_ui with declarative blocks; host heals partial JSON tokens in flight.",
+                detail: "Model invokes render_threadframe with declarative blocks; host heals partial JSON tokens in flight.",
               },
               {
                 id: "server",

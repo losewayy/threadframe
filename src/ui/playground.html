@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Intelligence UI · Playground</title>
+  <title>ThreadFrame · Playground</title>
   <style>
     :root { color-scheme: dark; --pg-bg: #1b1c1c; --pg-panel: #242626; --pg-soft: #2e3130; --pg-border: #404341; --pg-text: #eceeea; --pg-muted: #b0b6b1; --pg-button: #e1e5df; --pg-button-text: #252a26; --pg-focus: #9cafda; --pg-success: #8abca3; }
     :root:has(.light-host) { color-scheme: light; --pg-bg: #f7f7f6; --pg-panel: #fff; --pg-soft: #f1f1ef; --pg-border: #dedfdb; --pg-text: #292a28; --pg-muted: #686b65; --pg-button: #343832; --pg-button-text: #fff; --pg-focus: #526a9b; --pg-success: #32775e; }
@@ -63,7 +63,7 @@
 </head>
 <body>
   <header class="top">
-    <div class="brand"><span class="brand-mark" data-pg-icon aria-hidden="true"></span><div><h1>Intelligence UI</h1><p class="sub">Playground</p></div></div>
+    <div class="brand"><span class="brand-mark" data-pg-icon aria-hidden="true"></span><div><h1>ThreadFrame</h1><p class="sub">Playground</p></div></div>
     <span class="environment">Local sandbox</span>
   </header>
   <div class="workspace">
@@ -96,7 +96,7 @@
         <div class="assistant-heading"><span class="assistant-mark" data-pg-icon aria-hidden="true"></span>Assistant</div>
         <p class="assistant-intro">Here's an interactive view. Explore the options below.</p>
         <div id="bubble" class="chat-bubble">
-          <iframe id="host-frame" title="Interactive Intelligence UI" sandbox="allow-scripts" allow="clipboard-write *" src="/view"></iframe>
+          <iframe id="host-frame" title="Interactive ThreadFrame" sandbox="allow-scripts" allow="clipboard-write *" src="/view"></iframe>
         </div>
         <p id="message-preview" class="message-preview" role="status" hidden></p>
         <p class="thread-note">Interactive preview · Changes stay in this session</p>
@@ -203,7 +203,7 @@
           id: msg.id,
           result: {
             protocolVersion: "2026-01-26",
-            hostInfo: { name: "intelligence-ui-playground", version: "0.2.0" },
+            hostInfo: { name: "threadframe-playground", version: "0.3.0" },
             hostCapabilities: { openLinks: {}, message: { text: {} } },
             hostContext: { theme: hostTheme }
           }

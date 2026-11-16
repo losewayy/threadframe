@@ -1,49 +1,49 @@
 # Changelog
 
-## [Unreleased]
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0] - 2026-11-16
+
+### Changed
+
+- Rebranded package, server, and CLI binary to **ThreadFrame** (`threadframe`), exposing `render_threadframe`, `inspect_preset_frame`, `ui://threadframe/view.html`, and `threadframe://examples/svg` with `THREADFRAME_HOST` override support.
+- Simplified `README.md` and `README.zh-CN.md` around quick installation, visual demo, client auto-adaptation, and security boundaries.
 
 ### Added
 
-- Capability-based native MCP Apps, Antigravity and Markdown response adapters.
-- Explicit local-stdio HTML artifact export, plus CLI stdin input and compact transparent --embed output.
-- Safe vector example resource, complete tool usage example and non-blocking UI render diagnostics.
+- Capability-based native MCP Apps, Antigravity, and Markdown response adapters (`detectClientAdapter`).
+- Explicit local-stdio HTML artifact export (`embedPath` with path safety validation), CLI `stdin` (`-`) input, and compact transparent `--embed` output.
+- Safe vector example resource (`threadframe://examples/svg`), inline tool usage example, and non-blocking `threadframe:render` diagnostics.
 
 ### Fixed
 
-- Exported iframe pages skip MCP Apps connections and use local clipboard actions.
-- Embedded pages synchronize accessible host themes and document theme events.
-- Source-mode servers read the compiled inline bundle rather than the development HTML entry.
+- Added synchronous `<textarea>` clipboard fallback in `copyText` when `navigator.clipboard` is blocked inside sandboxed or `file://` iframes.
+- Exported and embedded standalone pages skip MCP Apps host handshakes and route footer actions directly to clipboard copy.
+- Embedded pages synchronize host light/dark classes and `themechange` events cleanly.
+- Source-mode servers resolve the compiled inline bundle reliably regardless of working directory.
 
 ## [0.2.0] - 2026-11-16
 
 ### Added
 
-- Bounded grid, tabs and accordion composition with shared bindings and persistent state.
-- Semantic callout, reactive stats, selectable timeline and copyable code blocks.
-- Line, bar and donut SVG plots with formulas, precision and pointer/keyboard inspection.
-- Safe responsive vector canvases with seven whitelisted primitives and numeric/text formulas.
-- Workbench, vector lab and launch kit showcases, bringing the preset catalog to seven.
-- Playground width switching, server-validated JSON runs/streams and acknowledged message previews.
-- Source-graph guards, behavioral tests, Ubuntu/Node 22 CI, package allowlisting and prepack checks.
-- Bilingual documentation, an architecture diagram, recorded UI demo and runnable JSON example.
+- Bounded `grid`, `tabs`, and `accordion` composition with shared bindings and persistent state.
+- Semantic `callout`, reactive `stats`, selectable `timeline`, and copyable `code` blocks.
+- `line`, `bar`, and `donut` SVG plots with formulas, precision, and pointer/keyboard inspection.
+- Safe responsive vector canvases (`svg`) with seven whitelisted primitives and numeric/text formulas.
+- Workbench, vector lab, and launch kit showcases, bringing the preset catalog to seven.
+- Playground width switching (`760px` / `420px`), server-validated Custom JSON Spec drawer, and acknowledged `ui/message` previews.
+- Source-graph AST guards, behavioral contract tests, Ubuntu/Node 22 CI, package allowlisting, and prepack checks.
 
 ### Fixed
 
-- copy_state bypasses the host; offline actions copy instead of silently using an unavailable message bridge.
-- Clipboard denial shows an actionable status rather than false success.
-- String operands concatenate with + without changing numeric arithmetic.
-- Completed streamed blocks stay mounted, preserving controls and avoiding whole-view flicker.
-- Tab, accordion and timeline selections survive streaming; valid partial entries render safely.
-- Initial host theme, changed styles and local font faces synchronize with palette fallbacks.
-- Preview height follows content, with stable scrollbar gutters preventing horizontal shifts.
+- `copy_state` bypasses the host; offline actions copy instead of silently using an unavailable message bridge.
+- String operands concatenate with `+` without altering numeric arithmetic.
+- Completed streamed blocks, tab selections, accordion toggles, and timeline selections survive progressive updates.
+- Initial and changed host themes, style variables, and local font faces synchronize cleanly, with stable scrollbar gutters preventing horizontal shifts.
 
-### Changed
+## [0.1.0] - 2026-11-16
 
-- Split the runtime into a thin facade, independent blocks, DOM/state foundations and pure models.
-- Split CSS by tokens, structure, controls, data, layouts, vectors and content.
-- Refined light/dark surfaces, contrast, semantic colors and custom form controls.
-- Expanded MCP tool guidance with the full catalog, nesting and formula/template rules.
-
-## [0.1.0]
-
-- Initial MCP Apps server, six leaf blocks, progressive parsing, safe numeric formulas, Markdown fallback and standalone export.
+- Initial MCP Apps server, six core leaf blocks, progressive partial JSON parsing, safe numeric formulas, Markdown fallback, and standalone HTML export.

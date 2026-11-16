@@ -5,7 +5,7 @@ import { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema, StatItemSchema,
 export { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema } from "./content.js";
 
 /**
- * Declarative UI specification schema for Intelligence UI.
+ * Declarative UI specification schema for ThreadFrame.
  * Leaf primitives, bounded layout containers, and progressive streaming tolerance.
  */
 

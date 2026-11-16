@@ -355,9 +355,9 @@ test("standalone injection preserves literal code and opts into embed without sc
   for (const embed of [false, true]) {
     const html = injectStandaloneHtml(bundle, spec, { embed });
     assert.equal((html.match(/<script>/g) ?? []).length, 1);
-    const payload = html.split("window.__INTELLIGENCE_UI_SPEC__ = ")[1].split(";")[0];
+    const payload = html.split("window.__THREADFRAME_SPEC__ = ")[1].split(";")[0];
     assert.deepEqual(JSON.parse(payload), spec);
-    assert.equal(html.includes("__INTELLIGENCE_UI_EMBED__ = true"), embed);
+    assert.equal(html.includes("__THREADFRAME_EMBED__ = true"), embed);
   }
 });
 
@@ -386,7 +386,7 @@ async function connectTestClient(name: string, capabilities: ClientCapabilities,
 }
 
 test("real MCP sessions preserve native results and restrict embed writes to explicit local exports", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "intelligence-ui-"));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "threadframe-"));
   const spec = UiSpecSchema.parse({ title: "Adapter contract", blocks: [{ kind: "callout", body: "Local export" }] });
   const resultSchema = z.object({ content: z.array(z.object({ type: z.literal("text"), text: z.string() })), isError: z.boolean().optional(), structuredContent: UiSpecSchema.optional() });
   try {
@@ -399,16 +399,16 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
       const client = await connectTestClient(scenario.name, scenario.capabilities, scenario.local);
       try {
         const embedPath = path.join(directory, `${scenario.name} space.html`);
-        const result = resultSchema.parse(await client.request("tools/call", { name: "render_intelligence_ui", arguments: { ...spec, embedPath } }));
+        const result = resultSchema.parse(await client.request("tools/call", { name: "render_threadframe", arguments: { ...spec, embedPath } }));
         if (scenario.name === "Native") {
           assert.deepEqual(result.structuredContent, spec);
           assert.equal(result.content[0].text, renderFallbackMarkdown(spec));
           const listing = await client.request("tools/list", {});
           const tools = z.array(z.object({ name: z.string(), inputSchema: z.record(z.string(), z.unknown()) })).parse(listing.tools);
-          const schema = JSON.stringify(tools.find((tool) => tool.name === "render_intelligence_ui")!.inputSchema);
+          const schema = JSON.stringify(tools.find((tool) => tool.name === "render_threadframe")!.inputSchema);
           for (const kind of ["controls", "stats", "svg", "timeline", "grid"]) assert.ok(schema.includes(`"const":"${kind}"`));
           assert.ok(!schema.includes('"$ref"'));
-          const examples = await client.request("resources/read", { uri: "intelligence-ui://examples/svg" });
+          const examples = await client.request("resources/read", { uri: "threadframe://examples/svg" });
           const resources = z.array(z.object({ text: z.string() })).parse(examples.contents);
           for (const example of Object.values(JSON.parse(resources[0].text))) UiSpecSchema.parse(example);
         } else if (scenario.local) {
@@ -416,7 +416,7 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.ok(result.content[0].text.includes("file:///"));
           const html = await fs.readFile(embedPath, "utf8");
           assert.doesNotMatch(html, /<script\b[^>]*\bsrc\s*=/i);
-          assert.ok(html.includes("window.__INTELLIGENCE_UI_EMBED__ = true"));
+          assert.ok(html.includes("window.__THREADFRAME_EMBED__ = true"));
           assert.ok(html.includes(spec.title));
         } else {
           assert.equal(result.isError, true);
@@ -425,14 +425,14 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
         if (!scenario.written) await assert.rejects(fs.access(embedPath));
         if (scenario.name === "Antigravity") {
           for (const target of ["bad.json", "NUL.html", "CON/file.html", "device.html:stream", "\\\\.\\device.html"]) {
-            const rejected = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_ui", arguments: { preset: "agent-launch-kit", embedPath: target.startsWith("\\\\") ? target : path.join(directory, target) } }));
+            const rejected = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_frame", arguments: { preset: "agent-launch-kit", embedPath: target.startsWith("\\\\") ? target : path.join(directory, target) } }));
             assert.equal(rejected.isError, true, target);
           }
           const presetPath = path.join(directory, "preset.html");
-          const preset = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_ui", arguments: { preset: "agent-launch-kit", embedPath: presetPath } }));
+          const preset = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_frame", arguments: { preset: "agent-launch-kit", embedPath: presetPath } }));
           assert.equal(preset.isError, undefined);
-          assert.ok((await fs.readFile(presetPath, "utf8")).includes("__INTELLIGENCE_UI_SPEC__"));
-          const noFile = resultSchema.parse(await client.request("tools/call", { name: "render_intelligence_ui", arguments: spec }));
+          assert.ok((await fs.readFile(presetPath, "utf8")).includes("__THREADFRAME_SPEC__"));
+          const noFile = resultSchema.parse(await client.request("tools/call", { name: "render_threadframe", arguments: spec }));
           assert.ok(noFile.content[0].text.includes("embedPath"));
         }
       } finally { await client.close(); }

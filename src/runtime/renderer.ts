@@ -11,7 +11,7 @@ interface BlockView {
   context: BlockRenderContext;
 }
 
-export class IntelligenceUiRenderer {
+export class ThreadFrameRenderer {
   private readonly state: UiStateStore;
   private shell: HTMLElement | null = null;
   private headerEl: HTMLElement | null = null;

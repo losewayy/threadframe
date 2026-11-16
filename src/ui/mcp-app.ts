@@ -3,14 +3,14 @@ import { syncHostStyles } from "./host-styles.js";
 import { syncEmbedTheme } from "./embed-theme.js";
 import type { RenderReport } from "../runtime/core/types.js";
 import { PRESETS } from "../presets.js";
-import { IntelligenceUiRenderer } from "../runtime/renderer.js";
+import { ThreadFrameRenderer } from "../runtime/renderer.js";
 import type { UiSpec } from "../schema/uiSpec.js";
 import "./styles.css";
 
 declare global {
   interface Window {
-    __INTELLIGENCE_UI_SPEC__?: UiSpec;
-    __INTELLIGENCE_UI_EMBED__?: boolean;
+    __THREADFRAME_SPEC__?: UiSpec;
+    __THREADFRAME_EMBED__?: boolean;
   }
 }
 
@@ -28,17 +28,17 @@ function resolveSpecPayload(raw: unknown): unknown {
   return raw;
 }
 
-const app = new App({ name: "Intelligence UI", version: "0.2.0" });
+const app = new App({ name: "ThreadFrame", version: "0.3.0" });
 
-let currentStandaloneSpec: UiSpec | null = window.__INTELLIGENCE_UI_SPEC__ ?? null;
+let currentStandaloneSpec: UiSpec | null = window.__THREADFRAME_SPEC__ ?? null;
 const useHostBridge = !currentStandaloneSpec && window.parent !== window;
-if (window.__INTELLIGENCE_UI_EMBED__ === true) syncEmbedTheme();
+if (window.__THREADFRAME_EMBED__ === true) syncEmbedTheme();
 let hostConnected = false;
 let lastReport: RenderReport | undefined;
 function reportRender(report: RenderReport): void {
   lastReport = report;
   document.documentElement.dataset.iuiRenderStatus = report.status;
-  window.dispatchEvent(new CustomEvent("intelligence-ui:render", { detail: report }));
+  window.dispatchEvent(new CustomEvent("threadframe:render", { detail: report }));
   if (hostConnected) void app.sendLog({ level: report.status === "error" ? "error" : "info", data: report }).catch(() => {});
 }
 let replayTimers: number[] = [];
@@ -75,7 +75,7 @@ function runStandaloneProgressiveBuild(spec: UiSpec): void {
   }
 }
 
-const renderer = new IntelligenceUiRenderer(root, {
+const renderer = new ThreadFrameRenderer(root, {
   sendMessage: useHostBridge ? async (text: string) => {
       await app.sendMessage({
         role: "user",
@@ -97,7 +97,7 @@ if (currentStandaloneSpec) {
 } else {
   renderer.renderPartial(
     {
-      title: "Intelligence UI",
+      title: "ThreadFrame",
       subtitle: "Waiting for host tool stream...",
       blocks: [],
     },

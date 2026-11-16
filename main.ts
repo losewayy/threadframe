@@ -36,7 +36,7 @@ async function exportStandaloneHtml(source: string, outputPath: string, embed: b
 
   await fs.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
   await fs.writeFile(path.resolve(outputPath), injected, "utf-8");
-  console.log(`Exported standalone Intelligence UI to ${path.resolve(outputPath)}`);
+  console.log(`Exported standalone ThreadFrame to ${path.resolve(outputPath)}`);
 }
 
 async function readPlaygroundHtml(): Promise<string> {
@@ -118,8 +118,8 @@ export async function startHttpServer(makeServer: () => McpServer): Promise<void
   });
 
   const httpServer = app.listen(port, () => {
-    console.log(`Intelligence UI playground: http://127.0.0.1:${port}/`);
-    console.log(`Intelligence UI MCP HTTP:   http://127.0.0.1:${port}/mcp`);
+    console.log(`ThreadFrame playground: http://127.0.0.1:${port}/`);
+    console.log(`ThreadFrame MCP HTTP:   http://127.0.0.1:${port}/mcp`);
   });
 
   const shutdown = () => {
@@ -136,7 +136,7 @@ async function main(): Promise<void> {
     const source = process.argv[exportIdx + 1];
     const out = process.argv[exportIdx + 2];
     if (!source || !out || out.startsWith("--")) {
-      console.error("Usage: intelligence-ui --export <preset|spec.json|-> <output.html> [--embed]");
+      console.error("Usage: threadframe --export <preset|spec.json|-> <output.html> [--embed]");
       process.exit(1);
     }
     await exportStandaloneHtml(source, out, process.argv.includes("--embed"));

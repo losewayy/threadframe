@@ -1,136 +1,103 @@
-# Intelligence UI
+# ThreadFrame
+
+[![CI](https://github.com/losewayy/threadframe/actions/workflows/ci.yml/badge.svg)](https://github.com/losewayy/threadframe/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
 
 [English](README.md)
 
-用声明式 JSON 在 AI 对话里呈现可交互的小界面。项目提供流式渲染器和 MCP Apps 服务：兼容的宿主加载单文件 HTML，参数和公式在本地计算，纯文本客户端收到 Markdown 回退内容。
+**ThreadFrame** 是一个开源的流式对话界面运行时和 MCP Apps（`ui://`，SEP-1865）服务端，用于在 AI 对话气泡里直接渲染可交互的小卡片。模型只返回简洁的声明式 JSON，运行时负责边流式到达边渲染积木、在本地无 `eval` 安全计算公式、绘制响应式矢量图形，并按连接的宿主客户端自动适配。
 
-![真实录制的上线向导：指标、图表、步骤流和命令预览联动](docs/demo.gif)
+![ThreadFrame 交互式上线向导演示](docs/demo.gif)
 
-## 定位与同类项目
+## 快速开始
 
-这是独立实现，不修改聊天客户端，也不复刻闭源 ChatGPT UI 协议。模型只提交数据、公式和有限嵌套的组件树，运行时负责 DOM、SVG、样式和交互，不需要 React，也不执行模型生成的前端代码。
+需要 **Node.js 22+** 和 **pnpm 10.15.1**。
 
-| 项目 | 接入方式 | 本项目的区别 |
-| --- | --- | --- |
-| [OpenUI](https://www.openui.com/docs) | 在应用前端注册组件库并渲染 OpenUI Lang，官方文档包含 [React 渲染器](https://www.openui.com/docs/openui-lang/renderer)。 | 采用固定 UiSpec 组件目录，以 MCP Apps 单文件资源交付，不需要 OpenUI Lang 渲染器。 |
-| [A2UI](https://developers.googleblog.com/en/introducing-a2ui-an-open-project-for-agent-driven-interfaces/) | 智能体发送声明式界面描述，由客户端的可信组件目录渲染。 | 提供自己的有限 Schema、本地公式和 Markdown 回退，不实现 A2UI 协议。 |
-| Intelligence UI | MCP 工具同时返回 JSON 和 Markdown，由兼容宿主内嵌资源。 | 适合紧凑的计算器、方案对比、规划面板和配置预览，也可独立导出 HTML。 |
-
-这些区别描述接入方式，不代表性能排名或协议可以互换。系统架构图见英文主文档；调用从 MCP 服务经过宿主、薄渲染入口、注册表进入独立积木，积木依赖 DOM/状态基座和纯计算模块，禁止反向依赖及积木横向互引。
-
-## 组件目录
-
-完整目录为 **12 个叶子积木＋3 个布局容器，共 15 种**。
-
-| 类别 | 积木 | 用途 |
-| --- | --- | --- |
-| 决策与输入 | `choices`、`controls` | 决策卡片、滑块、开关和分段选择，定义共享变量。 |
-| 指标与可视化 | `stats`、`chart`、`plot`、`svg` | KPI、分解条、折线/柱状/圆环图和安全矢量图解。 |
-| 对比与进度 | `compare`、`checklist`、`timeline`、`architecture` | 对比矩阵、交互清单、可选步骤流和分层架构。 |
-| 说明与配置 | `callout`、`code` | 语义提示及可插值、可复制的配置预览。 |
-| 布局 | `grid`、`tabs`、`accordion` | 响应式组合、持久页签选择和折叠状态。 |
-
-嵌套深度固定：grid 只放叶子积木；tabs 和 accordion 的每项可放叶子或一层 grid，不能继续嵌套 tabs/accordion。隐藏的面板保持挂载，因此不同面板里的控件、图表和指标可以持续联动。
-
-## 从源码运行
-
-需要 Node.js 22 或更新版本、pnpm 10.15.1。将仓库地址替换为实际地址：
+### 1. 本地打开调试台（30 秒体验）
 
 ```sh
-git clone <repository-url> intelligence-ui
-cd intelligence-ui
+git clone https://github.com/losewayy/threadframe.git
+cd threadframe
 pnpm install --frozen-lockfile
-pnpm run check
-pnpm dev
+pnpm start
 ```
 
-Playground 位于 `http://127.0.0.1:3001/`，Streamable HTTP MCP 位于 `http://127.0.0.1:3001/mcp`。可以在启动前设置 `PORT` 环境变量。`pnpm dev` 运行源码服务端，但仍需要已构建的 UI；修改 UI 后重新构建并刷新，修改预设或服务端后重新启动服务。
+打开 `http://127.0.0.1:3001/` 即可体验内置的 7 套场景、重放流式逐块加载、切换深浅色主题、切换宽/窄对话宽度（760px / 420px），以及粘贴自定义 JSON 直接校验试跑。
+
+### 2. 接入 Codex
 
 ```sh
-pnpm run typecheck
-pnpm run build
-pnpm test
+codex mcp add threadframe -- node /path/to/threadframe/dist/main.js --stdio
 ```
 
-`pnpm run check` 包括类型检查、服务端编译、Vite 单文件打包和测试。CI 在 Ubuntu、Node 22 上执行冻结依赖安装、构建、测试和导出冒烟检查。
-
-## Playground 调试
-
-七个场景分别是 `gpu-vram-tuner`、`runtime-compare`、`deploy-checklist`、`mcp-architecture`、`composable-workbench`、`svg-visual-lab`、`agent-launch-kit`。
-
-- 重放半截输入，观察合法积木逐步挂载。
-- 切换宿主明暗主题，以及 Wide/Compact 预览宽度。
-- 展开 Custom JSON Spec，粘贴 JSON 后全量运行或按块模拟流式输入；服务端用同一份 Zod Schema 返回校验字段路径。
-- 查看可折叠的桥接日志。`ui/message` 会收到 JSON-RPC 应答，并在界面下方短暂显示消息预览。
-- 本地预览 iframe 获得写剪贴板权限。实际宿主可能拒绝该权限，此时界面会明确显示失败。
-
-预设是可编辑示例。容量目标和显存估计都不是实测硬件性能数据；上线命令含模型占位符，需要自行审阅，项目不会执行它。
-
-## MCP 接入与独立导出
-
-服务暴露 `render_intelligence_ui`、`inspect_preset_ui` 和 `ui://intelligence-ui/view.html` 资源。工具同时返回 `structuredContent` 和 Markdown；是否显示交互界面取决于客户端是否支持 MCP Apps，纯文本客户端仍能读取回退结果。
-
-Claude Desktop 或其他 stdio 客户端先构建，再配置：
+### 3. 接入 Claude Desktop 或任意 stdio MCP 客户端
 
 ```json
 {
   "mcpServers": {
-    "intelligence-ui": {
+    "threadframe": {
       "command": "node",
-      "args": ["<repository>/dist/main.js", "--stdio"]
+      "args": ["/path/to/threadframe/dist/main.js", "--stdio"]
     }
   }
 }
 ```
 
-将 `<repository>` 替换为客户端可访问的检出目录，修改配置后重启客户端。stdio 配置不要启动 HTTP 入口。HTTP 客户端可在运行 `pnpm dev` 或 `node dist/main.js` 后，将 Streamable HTTP 地址设为 `http://127.0.0.1:3001/mcp`。服务只绑定本机回环地址，公网部署、身份验证和 TLS 不在当前服务的职责内。
+> 运行 `pnpm start` 或 `pnpm dev` 时，也会在 `http://127.0.0.1:3001/mcp` 提供本机回环的 Streamable HTTP MCP 接口。
 
-两个工具会按客户端实际声明的 UI 能力分流。原生 MCP Apps 客户端保持原有 Markdown 与 structuredContent 返回，不增加导出提示，也不写文件，即使填写 embedPath 也会忽略。没有 UI 能力时，名称匹配 Antigravity、Jetski、Cascade 则进入 antigravity 模式，其余进入 markdown 模式。环境变量 `INTELLIGENCE_UI_HOST=antigravity` 只覆写非 UI 分支，不覆盖已声明的 MCP Apps 支持；识别名称不等于保证客户端支持某个嵌入标签。
-
-本地 `--stdio` 模式下，两个工具均可选填 `embedPath`，将内嵌页写入指定的本地 `.html` 产物路径。允许跨目录，禁止设备路径、保留设备名、备用数据流与其他后缀；HTTP 工具调用始终禁止写文件。返回值只追加识别模式和 `file:///` 文件 URI，不塞入 HTML 源码。例如，非 UI 本地客户端可传 `{"preset":"agent-launch-kit","embedPath":"artifacts/launch-kit.html"}` 调用 inspect_preset_ui，再由客户端按自己的方式展示产物。指定位置已有的普通 HTML 文件会被覆盖。
-
-render_intelligence_ui 的说明内含完整 controls/stats/svg 最小示例；`intelligence-ui://examples/svg` 资源提供容量条、流程箭头和动态尺寸三个示例。服务端线上 Schema 保留所有积木分支且没有 `$ref`；部分客户端会简化模型看到的复杂联合类型，可参照示例填字段。
+### 4. 导出独立 HTML 或内嵌卡片
 
 ```sh
-node dist/main.js --stdio
 node dist/main.js --export agent-launch-kit out/launch-kit.html
-node dist/main.js --export docs/example.json out/custom.html
-node dist/main.js --export agent-launch-kit out/embed.html --embed
+node dist/main.js --export docs/example.json out/custom.html --embed
 cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 ```
 
-导出语法为 `--export <preset|spec.json|-> <output.html> [--embed]`。`-` 从标准输入读取 JSON 并校验；PowerShell 可用 `Get-Content -Raw docs/example.json` 替代 cat。
+所有脚本和样式均打包进同一个零外链单文件 HTML（`dist/mcp-app.html`），双击即可离线交互。
 
-导出文件可以直接打开，脚本和样式全部内联。导出页即使放进 iframe 也不会建立 MCP Apps 连接或发宿主消息；底部动作复制文本，代码卡也有独立复制按钮。浏览器的安全上下文和权限仍然适用，复制被拒会明确提示。页面里的状态不会写回源 JSON。
+## 一套 MCP 服务，按客户端能力自动适配
 
-`--embed` 额外启用透明背景和紧凑间距。主题同步观察 light/dark 类名与可访问父页面的主题属性，也接受 `themechange` 自定义事件，detail 可为 `"light"` / `"dark"` 或 `{theme:"light"}`。跨域父页面无法读取，宿主需自行将主题写到内嵌文档或投递文档内事件；没有信号时跟随系统主题。
+每次建立连接握手时，服务端都会读取客户端声明的 UI 能力（`getUiCapability`）与客户端身份（`clientInfo`），自动走对应通道：
 
-渲染完成、等待局部输入或失败分别报告 ready、partial、error，以及已显示的顶层积木数和待完成数量。文档发出 `intelligence-ui:render` 事件并更新 `data-iui-render-status`；已连接的 MCP Apps 还使用 SDK 日志通道反馈，可在 Playground 的桥接日志查看。渲染异常标明积木位置。工具返回成功只代表服务端成功，不等于界面已经显示；确认不阻塞工具返回，纯文本客户端也不会虚报界面显示成功。
+- **支持 MCP Apps 的客户端**（如 Codex 等）：自动使用 `ui://threadframe/view.html` 和 `structuredContent`，在聊天区原生弹出可交互界面。
+- **HTML 内嵌型客户端**（如 Antigravity，或在非 UI 宿主下设置环境变量 `THREADFRAME_HOST=antigravity`）：在本地 `--stdio` 模式下可选传入 `embedPath`，直接将透明紧凑的 `--embed` 单文件写到指定产物目录，不浪费模型上下文。
+- **纯终端 / 文本客户端**：自动输出结构清楚的 Markdown 表格、清单和实时算好的代码块。
+
+## 积木目录（15 种）
+
+包含 **12 种叶子积木** 和 **3 种布局容器**：
+
+| 类别 | 积木 | 用途 |
+| --- | --- | --- |
+| 决策与输入 | `choices`、`controls` | 选择卡片（修改变量或触发提示词）；滑块、开关与分段选择器。 |
+| 指标与可视化 | `stats`、`chart`、`plot`、`svg` | KPI 指标卡；进度条/堆叠条；折线/竖柱/圆环矢量图；可联动的安全 SVG 画板。 |
+| 对比与流程 | `compare`、`checklist`、`timeline`、`architecture` | 方案对比矩阵、带进度清单、可选步骤时间线、分层架构点击视图。 |
+| 提示与代码 | `callout`、`code` | 语义提示条，以及支持 `{{var}}` 变量实时替换与一键复制的代码/命令预览卡。 |
+| 布局容器 | `grid`、`tabs`、`accordion` | 响应式分栏网格、标签页与折叠抽屉，隐藏面板中的控件和图表同样保持实时联动。 |
+
+容器采用有界扁平组合：`grid` 内放置叶子积木，`tabs` 和 `accordion` 每项可放叶子积木或一层 `grid`，Schema 不含递归 `$ref`。
+
+7 个内置展示预设（`inspect_preset_frame`）：`gpu-vram-tuner`、`runtime-compare`、`deploy-checklist`、`mcp-architecture`、`composable-workbench`、`svg-visual-lab`、`agent-launch-kit`。
 
 ## 变量、公式与安全边界
 
-控件 ID 定义共享变量。公式支持算术、比较、布尔值、三元表达式，以及 `min`、`max`、`abs`、`floor`、`ceil`、`round`、`clamp`、`if`。`+` 任一操作数为字符串时拼接，否则保持数值加法；不支持 JavaScript 求值、属性访问或任意函数调用。
+- **零 `eval` / `new Function`**：所有公式通过自研词法与递归下降解析器求值，支持四则运算、比较、三元表达式、`min`/`max`/`abs`/`floor`/`ceil`/`round`/`clamp`/`if`，当 `+` 任意一侧为字符串时执行字符串拼接；可在严格 CSP 沙盒下运行。
+- **原生 DOM 与 SVG 白名单**：所有节点均通过 `createElement` / `createElementNS` 与 `textContent` 构建；`svg` 积木仅允许 `rect`、`circle`、`line`、`path`、`text`、`polyline`、`polygon` 和语义配色 token，Schema 直接拒绝脚本、事件属性和外链。
+- **受控写盘与复制兜底**：`embedPath` 仅允许本地 `--stdio` 模式写入 `.html` 文件（HTTP 模式直接禁止并拦截非法设备路径）；沙盒内嵌页跳过无效宿主握手，按钮自动回退为安全剪贴板复制（`navigator.clipboard` 不可用时自动启用 `<textarea>` 兼容复制）。
+- **示例参考**：MCP 工具内置最小联动示例，同时暴露 `threadframe://examples/svg` 资源和可运行的 [docs/example.json](docs/example.json)。
 
-[可运行示例](docs/example.json) 组合了 controls、stats 和 code。代码模板的 `{{var}}` 替换为当前变量，未知变量保留占位符。SVG 数值属性支持对应的 `*Formula`，`textFormula` 支持 `round(vram, 1) + ' GB'` 等字符串表达式。非法或未完成公式使用安全回退。代码插值只是文本替换，不做 shell 转义，运行前必须自行检查。
-
-plot 支持 line、bar、donut，数据点含 label 及 value/formula，可设置 max/maxFormula、precision、坐标轴标签及圆环中心公式。矢量画板要求正数宽高，只接受 rect、circle、line、path、text、polyline、polygon，颜色只能使用语义 token。
-
-运行时通过原生 DOM/SVG API 和 `textContent` 构造内容。SVG 的危险标签、事件属性、外部链接及任意颜色 URL 会被拒绝；工具 Schema 有限展开，不含递归 `$ref` 图。合法的部分矢量、指标或步骤条目可以先显示，未完成部分继续等待。
-
-单文件 UI 不依赖 CDN、外部图片、在线字体或动态代码执行。宿主的沙盒和 CSP 决定最终能力。首次及后续宿主主题、样式变量与本机字体声明会同步；网络字体声明被忽略，缺少变量时使用默认 Linear 风格。滑块和开关就地更新绑定，send_message 使用宿主桥接，copy_state 绕过宿主直接复制。复制失败不会伪报成功。
-
-项目是固定目录的小组件运行时，不是任意 HTML 浏览器、命令执行器、通用仪表盘框架或 OpenUI/A2UI 协议兼容层。
-
-## 打包与贡献
+## 开发与校验
 
 ```sh
-pnpm pack --pack-destination out
+pnpm run typecheck   # TypeScript 类型检查
+pnpm run build       # 编译服务端并构建单文件 dist/mcp-app.html
+pnpm test            # 架构 DAG 守卫、Schema、公式、回退与真实 MCP 会话测试
+pnpm run check       # 一键运行完整构建与测试
 ```
 
-prepack 会先构建并测试。包清单只包含编译后的服务端、内联 UI、原始 Playground HTML、文档与许可证。Playground 由服务端从磁盘读取，因此必须随包保留，它不是 Vite 入口。
-
-新增积木时补齐有限 Schema、独立渲染器、Markdown 回退、注册表和架构白名单。入口不超过 200 行，每个积木不超过 220 行。测试只覆盖真实行为和关键失败边界，不锁死示例数值、Markdown 标点，也不测试测试辅助函数。具体规则见 [AGENTS.md](AGENTS.md)。
+架构约束与测试规范见 [AGENTS.md](AGENTS.md)：源码通过 AST 检查保证无循环依赖与单向分层，`src/runtime/renderer.ts` 不超过 200 行，每个积木文件不超过 220 行。
 
 ## 许可证
 
-[MIT](LICENSE)。第三方依赖保留各自许可证。
+[MIT](LICENSE)

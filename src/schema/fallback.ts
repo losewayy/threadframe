@@ -157,6 +157,6 @@ export function renderFallbackMarkdown(spec: Partial<UiSpec>): string {
     lines.push("", ...formatBlockMarkdown(block, scope));
   }
 
-  lines.push("", "_Interactive view rendered via MCP Apps (`ui://intelligence-ui/view.html`) in supported desktop clients._");
+  lines.push("", "_Interactive view rendered via MCP Apps (`ui://threadframe/view.html`) in supported desktop clients._");
   return lines.join("\n").trim();
 }
