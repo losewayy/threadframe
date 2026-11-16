@@ -64,12 +64,12 @@ html[data-theme="dark"] {
 }
 
 :root {
-  --iui-surface: var(--card, var(--iui-base));
-  --iui-surface-alt: var(--secondary, var(--iui-raised));
-  --iui-border: var(--border, var(--iui-line));
+  --iui-surface: var(--card, var(--color-background-secondary, var(--iui-base)));
+  --iui-surface-alt: var(--secondary, var(--color-background-tertiary, var(--iui-raised)));
+  --iui-border: var(--border, var(--color-border-primary, var(--iui-line)));
   --iui-card-border: var(--card-border, var(--iui-border));
-  --iui-text: var(--foreground, var(--iui-ink));
-  --iui-muted: var(--muted-foreground, var(--iui-dim));
+  --iui-text: var(--foreground, var(--color-text-primary, var(--iui-ink)));
+  --iui-muted: var(--muted-foreground, var(--color-text-secondary, var(--iui-dim)));
   --iui-primary: var(--primary, var(--iui-key));
   --iui-primary-fg: var(--primary-foreground, var(--iui-key-fg));
   --iui-accent: var(--primary, var(--iui-blue));

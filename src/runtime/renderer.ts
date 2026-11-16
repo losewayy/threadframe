@@ -137,7 +137,7 @@ export class IntelligenceUiRenderer {
     for (const action of parsed.actions) {
       const button = el("button", "iui-action-btn", action.label);
       button.type = "button";
-      button.addEventListener("click", () => this.state.dispatchAction(action.label, action.promptTemplate));
+      button.addEventListener("click", () => this.state.dispatchAction(action.label, action.promptTemplate, action.kind));
       buttons.appendChild(button);
     }
     footer.appendChild(buttons);

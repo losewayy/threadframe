@@ -245,7 +245,9 @@ class Parser {
     let op: string | null;
     while ((op = this.matchOp("+", "-"))) {
       const right = this.parseMultiplicative();
-      left = op === "+" ? toNum(left) + toNum(right) : toNum(left) - toNum(right);
+      left = op === "+" && (typeof left === "string" || typeof right === "string")
+        ? String(left) + String(right)
+        : op === "+" ? toNum(left) + toNum(right) : toNum(left) - toNum(right);
     }
     return left;
   }

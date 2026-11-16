@@ -1,5 +1,6 @@
 import { walkBlocks, type UiBlock } from "../../schema/uiSpec.js";
 import type { VarScope } from "../formula.js";
+import { copyText } from "./clipboard.js";
 import type {
   BlockRenderContext, ControlSyncCallback, ReactiveBinding, RendererHostBridge, UiState,
 } from "./types.js";
@@ -18,6 +19,7 @@ export class UiStateStore implements UiState {
   constructor(
     private readonly bridge: RendererHostBridge = {},
     private readonly onStatus: (message: string) => void = () => {},
+    private readonly clipboard: (text: string) => Promise<boolean> = copyText,
   ) {}
 
   createContext(renderChild: (block: UiBlock) => HTMLElement): BlockRenderContext {
@@ -37,6 +39,10 @@ export class UiStateStore implements UiState {
 
   setStatus(message: string): void {
     this.onStatus(message);
+  }
+
+  copy(text: string): Promise<boolean> {
+    return this.clipboard(text);
   }
 
   prompt(text: string): boolean {
@@ -109,13 +115,13 @@ export class UiStateStore implements UiState {
     return parts.join(", ");
   }
 
-  async dispatchAction(label: string, template?: string): Promise<void> {
+  async dispatchAction(label: string, template?: string, kind?: "send_message" | "copy_state"): Promise<void> {
     const summary = this.summarize();
     const message = template
       ? template.replace("{{state_summary}}", summary)
       : `${label}: ${summary}`;
 
-    if (this.bridge.sendMessage) {
+    if (kind !== "copy_state" && this.bridge.sendMessage) {
       try {
         await this.bridge.sendMessage(message);
         this.setStatus("Sent to agent chat");
@@ -126,11 +132,7 @@ export class UiStateStore implements UiState {
       }
     }
 
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(message).catch(() => {});
-      this.setStatus(`Copied: ${summary}`);
-    } else {
-      this.setStatus(message);
-    }
+    const copied = await this.copy(message);
+    this.setStatus(copied ? "Copied to clipboard" : `Copy unavailable. Select and copy: ${message}`);
   }
 }

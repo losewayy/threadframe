@@ -16,6 +16,10 @@ test("formula evaluator computes arithmetic, ternary, and built-in math safely",
     1.4,
   );
   assert.equal(evaluateFormula("flash_attn ? 8 : 0", scope), 8);
+  assert.equal(evaluateFormula("round(vram, 1) + ' GB'", { vram: 2.56 }), "2.6 GB");
+  assert.equal(evaluateFormula("'load=' + 4 + true", {}), "load=4true");
+  assert.equal(evaluateFormula("true + 4", {}), 5);
+  assert.equal(evaluateFormula("4 + true + ' units'", {}), "5 units");
 });
 
 test("tool JSON Schema is finite and contains no recursive references", () => {
@@ -151,11 +155,20 @@ function vectorSpec() {
 test("vector schemas accept supported plots and primitives but reject unsafe attributes and canvas bounds", () => {
   const valid = vectorSpec();
   assert.equal(valid.blocks.length, 4);
+  assert.ok(UiSpecSchema.safeParse({ title: "Bars", blocks: [
+    { kind: "plot", mode: "bar", precision: 2, points: [{ label: "Measured", formula: "gain * 2" }] },
+    { kind: "svg", width: 100, height: 80, elements: [
+      { type: "polyline", points: "0,0 10,20 30,10", stroke: "primary" },
+      { type: "polygon", points: "0 0 20 0 10 20", fill: "success" },
+    ] },
+  ] }).success);
   for (const element of [
     { type: "script", text: "alert(1)" }, { type: "foreignObject" },
     { type: "rect", width: 10, onclick: "alert(1)" },
     { type: "text", text: "link", href: "https://example.com" },
     { type: "circle", r: 4, fill: "url(https://example.com/image)" },
+    { type: "polyline", points: "0,0 javascript:alert(1)" },
+    { type: "polygon", points: "0,0 10" },
   ]) {
     assert.equal(UiSpecSchema.safeParse({ title: "Unsafe vector", blocks: [
       { kind: "svg", width: 100, height: 80, elements: [element] },
@@ -224,6 +237,28 @@ test("formula evaluator returns null / fallback cleanly on malformed partial str
   assert.equal(evaluateFormula("2 + (3 *", {}), null);
   assert.equal(evaluateFormula("'unterminated", {}), null);
   assert.equal(evaluateNumericFormula("unknownFn(1)", {}, 42), 42);
+  assert.equal(evaluateFormula("4 + 'partial", {}), null);
+});
+
+test("actions route copy_state to the clipboard and send_message to the host with an offline fallback", async () => {
+  const sent: string[] = [], copied: string[] = [], statuses: string[] = [];
+  const clipboard = async (text: string) => { copied.push(text); return true; };
+  const state = new UiStateStore({ sendMessage: (text) => { sent.push(text); } },
+    (text) => statuses.push(text), clipboard);
+  state.scope.workers = 4;
+  await state.dispatchAction("Copy", "Plan: {{state_summary}}", "copy_state");
+  assert.deepEqual(copied, ["Plan: workers=4"]);
+  assert.equal(sent.length, 0);
+  await state.dispatchAction("Send", "Plan: {{state_summary}}", "send_message");
+  assert.deepEqual(sent, ["Plan: workers=4"]);
+  assert.equal(copied.length, 1);
+  const offline = new UiStateStore({}, (text) => statuses.push(text), clipboard);
+  await offline.dispatchAction("Apply", "Offline plan", "send_message");
+  assert.equal(copied.at(-1), "Offline plan");
+  const unavailable = new UiStateStore({}, (text) => statuses.push(text), async () => false);
+  await unavailable.dispatchAction("Copy", "Manual plan", "copy_state");
+  assert.match(statuses.at(-1)!, /Copy unavailable/);
+  assert.ok(statuses.at(-1)!.includes("Manual plan"));
 });
 
 test("all built-in presets conform to UiSpecSchema and render non-empty Markdown fallback", () => {

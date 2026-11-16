@@ -16,6 +16,8 @@ const coordinates = {
   circle: ["cx", "cy", "r"],
   line: ["x1", "y1", "x2", "y2"],
   path: [],
+  polyline: [],
+  polygon: [],
   text: ["x", "y", "fontSize"],
 } as const;
 

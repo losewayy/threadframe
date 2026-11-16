@@ -23,6 +23,7 @@ export interface UiState {
   notifyScopeChange(): void;
   setStatus(message: string): void;
   prompt(text: string): boolean;
+  copy(text: string): Promise<boolean>;
 }
 
 export interface BlockRenderContext {

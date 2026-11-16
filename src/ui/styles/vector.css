@@ -84,3 +84,26 @@
 .iui-donut-label {
   text-anchor: middle;
 }
+
+.iui-plot-readout {
+  min-height: 18px;
+  margin-top: 10px;
+  color: var(--iui-muted);
+  font-size: 11px;
+}
+
+.iui-plot-dot, .iui-plot-bar, .iui-donut-segment {
+  cursor: crosshair;
+}
+
+.iui-plot-dot:hover, .iui-plot-dot:focus,
+.iui-plot-bar:hover, .iui-plot-bar:focus,
+.iui-donut-segment:hover, .iui-donut-segment:focus {
+  outline: none;
+  stroke: var(--iui-text);
+  stroke-width: 3;
+}
+
+.iui-donut-segment:hover, .iui-donut-segment:focus {
+  stroke-width: 26;
+}

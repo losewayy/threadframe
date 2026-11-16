@@ -11,7 +11,8 @@ export const PlotBlockSchema = z.object({
   kind: z.literal("plot"),
   id: z.string().optional(),
   title: z.string().optional(),
-  mode: z.enum(["line", "donut"]),
+  mode: z.enum(["line", "donut", "bar"]),
+  precision: z.number().int().min(0).max(6).optional(),
   points: z.array(PlotPointSchema).min(1),
   xLabel: z.string().optional(),
   yLabel: z.string().optional(),
@@ -56,6 +57,11 @@ export const SvgElementSchema = z.discriminatedUnion("type", [
     type: z.literal("path"), ...paint,
     d: z.string().min(1).regex(/^[MmZzLlHhVvCcSsQqTtAaEe0-9+.,\s-]+$/),
   }),
+  ...(["polyline", "polygon"] as const).map((type) => z.strictObject({
+    type: z.literal(type), ...paint,
+    points: z.string().min(1).regex(/^\s*-?(?:\d+(?:\.\d*)?|\.\d+)(?:[\s,]+-?(?:\d+(?:\.\d*)?|\.\d+))+\s*$/)
+      .refine((value) => value.trim().split(/[\s,]+/).length % 2 === 0, "Expected coordinate pairs"),
+  })),
   z.strictObject({
     type: z.literal("text"), ...paint, ...position,
     text: z.string().optional(), textFormula: z.string().optional(),

@@ -8,13 +8,14 @@ export const renderSvg: BlockRenderer<"svg"> = (block, context) => {
   const canvas = svgCanvas(block.width, block.height, block.title ?? block.caption ?? "Vector diagram");
   const nodes = block.elements.map((element) => {
     const node = svgNode(element.type);
-    const outlined = element.type === "line" || element.type === "path";
+    const outlined = element.type === "line" || element.type === "path" || element.type === "polyline";
     node.setAttribute("fill", element.fill ? vectorColors[element.fill] : outlined ? "none" : vectorColors.primary);
     if (element.type === "text" && !element.fill) node.setAttribute("fill", vectorColors.text);
     if (element.stroke || outlined) node.setAttribute("stroke", vectorColors[element.stroke ?? "primary"]);
     node.setAttribute("stroke-width", String(element.strokeWidth ?? 1.5));
     node.setAttribute("opacity", String(element.opacity ?? 1));
     if (element.type === "path") node.setAttribute("d", element.d);
+    if (element.type === "polyline" || element.type === "polygon") node.setAttribute("points", element.points);
     if (element.type === "text") node.setAttribute("text-anchor", element.textAnchor ?? "start");
     canvas.appendChild(node);
     return { element, node };

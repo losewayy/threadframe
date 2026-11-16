@@ -10,9 +10,9 @@ html {
 
 body {
   margin: 0;
-  background: var(--background, var(--iui-canvas));
+  background: var(--background, var(--color-background-primary, var(--iui-canvas)));
   color: var(--iui-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   font-size: 13px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;

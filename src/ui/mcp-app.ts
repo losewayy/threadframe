@@ -1,4 +1,5 @@
-import { App, applyDocumentTheme } from "@modelcontextprotocol/ext-apps";
+import { App } from "@modelcontextprotocol/ext-apps";
+import { syncHostStyles } from "./host-styles.js";
 import { PRESETS } from "../presets.js";
 import { IntelligenceUiRenderer } from "../runtime/renderer.js";
 import type { UiSpec } from "../schema/uiSpec.js";
@@ -62,14 +63,12 @@ function runStandaloneProgressiveBuild(spec: UiSpec): void {
 }
 
 const renderer = new IntelligenceUiRenderer(root, {
-  sendMessage: async (text: string) => {
-    if (window.parent !== window) {
+  sendMessage: window.parent !== window ? async (text: string) => {
       await app.sendMessage({
         role: "user",
         content: [{ type: "text", text }],
       });
-    }
-  },
+  } : undefined,
   onReplayRequested: currentStandaloneSpec
     ? () => {
         if (currentStandaloneSpec) {
@@ -110,15 +109,10 @@ app.ontoolresult = (result) => {
   }
 };
 
-app.onhostcontextchanged = (ctx) => {
-  if (ctx.theme) {
-    applyDocumentTheme(ctx.theme);
-    document.documentElement.dataset.theme = ctx.theme;
-  }
-};
+app.onhostcontextchanged = (ctx) => syncHostStyles(ctx);
 
 if (window.parent !== window) {
-  void app.connect().catch(() => {
+  void app.connect().then(() => syncHostStyles(app.getHostContext())).catch(() => {
     // Standalone / non-MCP iframe fallback if parent does not speak MCP Apps JSON-RPC
     if (!currentStandaloneSpec) {
       currentStandaloneSpec = PRESETS["gpu-vram-tuner"];
