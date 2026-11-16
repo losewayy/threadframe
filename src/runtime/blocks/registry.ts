@@ -11,6 +11,9 @@ import { renderTabs } from "./tabs.js";
 import { renderAccordion } from "./accordion.js";
 import { renderPlot } from "./plot.js";
 import { renderSvg } from "./svg.js";
+import { renderStats } from "./stats.js";
+import { renderTimeline } from "./timeline.js";
+import { renderCode } from "./code.js";
 
 const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   choices: renderChoices,
@@ -25,6 +28,9 @@ const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   accordion: renderAccordion,
   plot: renderPlot,
   svg: renderSvg,
+  stats: renderStats,
+  timeline: renderTimeline,
+  code: renderCode,
 };
 
 export function renderBlock<K extends BlockKind>(

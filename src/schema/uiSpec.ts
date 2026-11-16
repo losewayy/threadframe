@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { PlotBlockSchema, PlotPointSchema, SvgBlockSchema, SvgElementSchema } from "./vector.js";
 export { PlotBlockSchema, SvgBlockSchema } from "./vector.js";
+import { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema, StatItemSchema, TimelineStepSchema } from "./content.js";
+export { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema } from "./content.js";
 
 /**
  * Declarative UI specification schema for Intelligence UI.
@@ -158,6 +160,9 @@ export const LeafBlockSchema = z.discriminatedUnion("kind", [
   CalloutBlockSchema,
   PlotBlockSchema,
   SvgBlockSchema,
+  StatsBlockSchema,
+  TimelineBlockSchema,
+  CodeBlockSchema,
 ]);
 
 // Containers are expanded explicitly so tool JSON Schemas never need recursive refs.
@@ -243,20 +248,23 @@ export interface PartialUiSpecResult {
   isComplete: boolean;
 }
 
-function partialVectorChildren(raw: unknown, depth = 0): { value: unknown; pending: boolean } {
+function partialBlockChildren(raw: unknown, depth = 0): { value: unknown; pending: boolean } {
   if (!raw || typeof raw !== "object" || depth > 2) return { value: raw, pending: false };
   const block = raw as Record<string, unknown>;
-  if (block.kind === "plot" || block.kind === "svg") {
-    const field = block.kind === "plot" ? "points" : "elements";
+  const list = block.kind === "plot" ? { field: "points", schema: PlotPointSchema }
+    : block.kind === "svg" ? { field: "elements", schema: SvgElementSchema }
+    : block.kind === "stats" ? { field: "items", schema: StatItemSchema }
+    : block.kind === "timeline" ? { field: "steps", schema: TimelineStepSchema } : null;
+  if (list) {
+    const { field, schema } = list;
     const children = block[field];
     if (!Array.isArray(children)) return { value: raw, pending: false };
-    const schema = block.kind === "plot" ? PlotPointSchema : SvgElementSchema;
     const valid = children.filter((child) => schema.safeParse(child).success);
     return { value: { ...block, [field]: valid }, pending: valid.length < children.length };
   }
   let pending = false;
   const children = (items: unknown) => Array.isArray(items) ? items.map((item) => {
-    const parsed = partialVectorChildren(item, depth + 1);
+    const parsed = partialBlockChildren(item, depth + 1);
     pending ||= parsed.pending;
     return parsed.value;
   }) : items;
@@ -303,7 +311,7 @@ export function parsePartialUiSpec(raw: unknown): PartialUiSpecResult {
   let pendingBlockCount = 0;
   if (Array.isArray(record.blocks)) {
     for (const item of record.blocks) {
-      const partial = partialVectorChildren(item);
+      const partial = partialBlockChildren(item);
       const parsed = UiBlockSchema.safeParse(partial.value);
       if (parsed.success) {
         validBlocks.push(parsed.data);

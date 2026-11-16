@@ -79,11 +79,13 @@ const layerZero = new Set([
   "src/schema/uiSpec.ts", "src/schema/fallback.ts", "src/runtime/formula.ts", "src/presets.ts",
   "src/schema/vector.ts", "src/runtime/vector.ts",
   "src/runtime/display.ts",
+  "src/schema/content.ts",
 ]);
 const blockLeaves = new Set([
   "choices", "controls", "chart", "compare", "checklist", "architecture",
   "callout", "grid", "tabs", "accordion",
   "plot", "svg",
+  "stats", "timeline", "code",
 ].map((name) => `${blocks}${name}.ts`));
 const blockImports = new Set([
   `${core}types.ts`, `${core}dom.ts`, `${core}state.ts`, "src/runtime/formula.ts", "src/schema/uiSpec.ts",

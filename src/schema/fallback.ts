@@ -1,6 +1,6 @@
 import { evaluateNumericFormula, type VarScope } from "../runtime/formula.js";
 import { plotCenter, plotValues, svgGeometry } from "../runtime/vector.js";
-import { formatNumber } from "../runtime/display.js";
+import { formatNumber, statDisplay, interpolateCode } from "../runtime/display.js";
 import { walkBlocks, type UiBlock, type UiSpec } from "./uiSpec.js";
 
 function initialScopeForSpec(spec: Partial<UiSpec>): VarScope {
@@ -22,6 +22,26 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
   }
 
   switch (block.kind) {
+    case "stats": {
+      for (const item of block.items) {
+        const display = statDisplay(item, scope);
+        lines.push(`- ${item.label}: ${display.value}${item.unit ? ` ${item.unit}` : ""}${display.delta !== undefined ? ` (${display.delta})` : ""}${display.warning ? " [warn]" : ""}`);
+      }
+      break;
+    }
+    case "timeline": {
+      for (const step of block.steps) {
+        lines.push(`- [${step.status}] ${step.title}${step.meta ? ` (${step.meta})` : ""}${step.detail ? `: ${step.detail}` : ""}`);
+      }
+      break;
+    }
+    case "code": {
+      const code = interpolateCode(block.template ?? block.code ?? "", scope);
+      const fence = "`".repeat(Math.max(3, ...[...code.matchAll(/`+/g)].map((match) => match[0].length + 1)));
+      lines.push(`${fence}${block.language ?? ""}`, code, fence);
+      if (block.caption) lines.push(block.caption);
+      break;
+    }
     case "plot": {
       const values = plotValues(block.points, scope).map((value) => block.mode === "donut" ? Math.max(0, value) : value);
       block.points.forEach((point, index) => lines.push(`- ${point.label}: ${formatNumber(values[index], block.precision)}${block.unit ? ` ${block.unit}` : ""}`));

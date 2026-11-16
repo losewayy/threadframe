@@ -18,6 +18,7 @@ export interface UiState {
   readonly selectedChoiceIds: Set<string>;
   readonly tabSelections: Map<string, string>;
   readonly accordionOpen: Map<string, boolean>;
+  readonly timelineSelections: Map<string, string>;
   selectedNodeId: string | null;
   containerKey(block: UiBlock): string;
   notifyScopeChange(): void;

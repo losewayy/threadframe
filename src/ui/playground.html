@@ -29,8 +29,8 @@
     button:hover { background: var(--pg-soft); }
     button.primary { background: var(--pg-button); color: var(--pg-button-text); border-color: var(--pg-button); font-weight: 550; }
     #theme-btn { margin-left: auto; }
-    .wrap { display: grid; grid-template-columns: minmax(0, 760px) minmax(240px, 1fr); gap: 28px; align-items: start; }
-    .wrap:has(.traffic:not([open])) { grid-template-columns: minmax(0, 760px) minmax(160px, 1fr); }
+    .wrap { display: grid; grid-template-columns: minmax(0, var(--preview-width, 760px)) minmax(240px, 1fr); gap: 28px; align-items: start; transition: grid-template-columns 220ms ease; }
+    .wrap:has(.traffic:not([open])) { grid-template-columns: minmax(0, var(--preview-width, 760px)) minmax(160px, 1fr); }
     .thread { min-width: 0; }
     .thread-heading { margin: 0 0 24px; color: var(--pg-muted); font-size: 11px; font-weight: 400; }
     .user-message { margin: 0 0 25px auto; width: fit-content; max-width: 85%; padding: 11px 16px; background: var(--pg-soft); border-radius: 14px 14px 4px 14px; font-size: 12px; }
@@ -48,7 +48,16 @@
     details[open] summary::after { content: "−"; }
     .traffic-caption { margin: 0 0 16px; font-size: 10px; color: var(--pg-muted); }
     .log-box { max-height: 650px; overflow-y: auto; scrollbar-gutter: stable; padding-right: 8px; color: var(--pg-muted); font: 10px/1.9 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; scrollbar-width: thin; }
-    @media (max-width: 960px) { .wrap, .wrap:has(.traffic:not([open])) { grid-template-columns: minmax(0, 760px); justify-content: center; } .traffic { position: static; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--pg-border); } .log-box { max-height: 260px; } }
+    .custom-spec { margin-bottom: 24px; padding: 14px 16px; border: 1px solid var(--pg-border); border-radius: 10px; background: var(--pg-panel); }
+    .custom-spec summary { padding: 0; }
+    .custom-spec label { display: block; color: var(--pg-muted); font-size: 11px; margin: 14px 0 8px; }
+    .custom-spec textarea { width: 100%; min-height: 200px; padding: 12px; border: 1px solid var(--pg-border); border-radius: 7px; resize: vertical; background: var(--pg-bg); color: var(--pg-text); font: 11px/1.6 ui-monospace, Consolas, monospace; }
+    .custom-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .spec-error { color: light-dark(#a32d2d, #f2a1a1); white-space: pre-wrap; font-size: 11px; }
+    .message-preview { margin: 12px 0; padding: 10px 12px; border-left: 2px solid var(--pg-success); border-radius: 0 6px 6px 0; background: var(--pg-soft); font-size: 11px; overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
+    @media (prefers-reduced-motion: reduce) { .wrap { transition: none; } }
+    @media (max-width: 960px) { .wrap, .wrap:has(.traffic:not([open])) { grid-template-columns: minmax(0, var(--preview-width, 760px)); justify-content: center; } .traffic { position: static; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--pg-border); } .log-box { max-height: 260px; } }
     @media (max-width: 540px) { .top { padding: 14px 16px; } .workspace { padding: 18px 12px; } .environment { display: none; } .toolbar { gap: 7px; margin-bottom: 22px; } .toolbar label { display: none; } select { width: 100%; } #theme-btn { margin-left: 0; } .user-message { max-width: 92%; } }
   </style>
 </head>
@@ -67,10 +76,19 @@
         <option value="mcp-architecture">4-Layer Architecture Stack</option>
         <option value="composable-workbench">Composable Deployment Workbench</option>
         <option value="svg-visual-lab">Vector Visual Lab</option>
+        <option value="agent-launch-kit">Inference Service Launch Kit</option>
       </select>
       <button id="stream-btn" class="primary" type="button">Replay stream</button>
+      <button id="width-btn" type="button">Width: Wide (760px)</button>
       <button id="theme-btn" type="button">Host Theme: Dark</button>
     </div>
+    <details class="custom-spec">
+      <summary>Custom JSON Spec</summary>
+      <label for="custom-json">Paste a UiSpec to validate and preview</label>
+      <textarea id="custom-json" spellcheck="false">{"title":"Custom view","blocks":[{"kind":"callout","body":"Replace this with your own UI spec."}]}</textarea>
+      <div class="custom-actions"><button id="run-custom" class="primary" type="button">Run Spec</button><button id="stream-custom" type="button">Simulate Stream</button></div>
+      <p id="spec-error" class="spec-error" role="alert" hidden></p>
+    </details>
     <main class="wrap">
       <section class="thread" aria-label="Desktop chat preview">
         <h2 class="thread-heading">Desktop chat preview</h2>
@@ -78,8 +96,9 @@
         <div class="assistant-heading"><span class="assistant-mark" data-pg-icon aria-hidden="true"></span>Assistant</div>
         <p class="assistant-intro">Here's an interactive view. Explore the options below.</p>
         <div id="bubble" class="chat-bubble">
-          <iframe id="host-frame" title="Interactive Intelligence UI" sandbox="allow-scripts" src="/view"></iframe>
+          <iframe id="host-frame" title="Interactive Intelligence UI" sandbox="allow-scripts" allow="clipboard-write *" src="/view"></iframe>
         </div>
+        <p id="message-preview" class="message-preview" role="status" hidden></p>
         <p class="thread-note">Interactive preview · Changes stay in this session</p>
       </section>
       <details class="traffic" open>
@@ -96,6 +115,8 @@
     const streamBtn = document.getElementById("stream-btn");
     const themeBtn = document.getElementById("theme-btn");
     const logEl = document.getElementById("rpc-log");
+    const messagePreview = document.getElementById("message-preview");
+    let messageTimer;
 
     let hostTheme = "dark";
     let frameReady = false;
@@ -119,7 +140,11 @@
 
     function runStreamSimulation(key) {
       const spec = presetsData[key];
-      if (!spec || !frameReady) return;
+      if (spec) runSpecStream(spec);
+    }
+
+    function runSpecStream(spec) {
+      if (!frameReady) return;
       clearTimers();
 
       const steps = spec.blocks.length;
@@ -188,6 +213,11 @@
         runStreamSimulation(presetSelect.value);
       } else if (msg.method === "ui/message" && msg.id !== undefined) {
         postToFrame({ jsonrpc: "2.0", id: msg.id, result: {} });
+        const content = Array.isArray(msg.params?.content) ? msg.params.content : [];
+        messagePreview.textContent = "Sent to agent: " + content.filter((part) => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("\n");
+        messagePreview.hidden = false;
+        clearTimeout(messageTimer);
+        messageTimer = setTimeout(() => { messagePreview.hidden = true; }, 6000);
       }
     });
 
@@ -225,13 +255,46 @@
       svg.appendChild(path);
       container.appendChild(svg);
     });
+    let compactPreview = false;
+    document.getElementById("width-btn").addEventListener("click", (event) => {
+      compactPreview = !compactPreview;
+      document.documentElement.style.setProperty("--preview-width", compactPreview ? "420px" : "760px");
+      event.currentTarget.textContent = compactPreview ? "Width: Compact (420px)" : "Width: Wide (760px)";
+    });
+    const customError = document.getElementById("spec-error");
+    async function runCustom(streaming) {
+      const buttons = [document.getElementById("run-custom"), document.getElementById("stream-custom")];
+      customError.hidden = true;
+      buttons.forEach((button) => { button.disabled = true; });
+      try {
+        if (!frameReady) throw new Error("The preview is starting. Try again in a moment.");
+        const input = JSON.parse(document.getElementById("custom-json").value);
+        const response = await fetch("/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+        const result = await response.json();
+        if (!response.ok) throw new Error((result.issues ?? []).map((issue) => (issue.path.join(".") || "spec") + ": " + issue.message).join("\n") || "Validation failed");
+        clearTimers();
+        if (streaming) runSpecStream(result.spec);
+        else {
+          postToFrame({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: result.spec } });
+          postToFrame({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: result.spec } });
+        }
+      } catch (error) {
+        customError.textContent = error.message;
+        customError.hidden = false;
+      } finally {
+        buttons.forEach((button) => { button.disabled = false; });
+      }
+    }
+    document.getElementById("run-custom").addEventListener("click", () => runCustom(false));
+    document.getElementById("stream-custom").addEventListener("click", () => runCustom(true));
     const prompts = {
       "gpu-vram-tuner": "Help me tune my local model to fit my GPU.",
       "runtime-compare": "Compare the inference backends and help me choose.",
       "deploy-checklist": "What should I check before releasing my MCP app?",
       "mcp-architecture": "Show me how the MCP app layers fit together.",
       "composable-workbench": "Help me plan an inference deployment and check its memory budget.",
-      "svg-visual-lab": "Show me how load and response change the plots and vector diagrams."
+      "svg-visual-lab": "Show me how load and response change the plots and vector diagrams.",
+      "agent-launch-kit": "Help me configure targets, check readiness, and prepare a service launch command."
     };
     document.getElementById("preset-select").addEventListener("change", (event) => {
       document.getElementById("user-prompt").textContent = prompts[event.target.value];

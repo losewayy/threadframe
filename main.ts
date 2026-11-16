@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import cors from "cors";
 import type { Request, Response } from "express";
+import { json } from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,6 +81,15 @@ export async function startHttpServer(makeServer: () => McpServer): Promise<void
 
   app.get("/presets.json", (_req: Request, res: Response) => {
     res.json(PRESETS);
+  });
+
+  app.post("/validate", json({ limit: "1mb" }), (req: Request, res: Response) => {
+    const parsed = UiSpecSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ issues: parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })) });
+      return;
+    }
+    res.json({ spec: parsed.data });
   });
 
   app.all("/mcp", async (req: Request, res: Response) => {

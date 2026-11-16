@@ -44,7 +44,7 @@ export function createServer(): McpServer {
     {
       title: "Render Inline Intelligence UI",
       description:
-        "Renders an interactive inline Intelligence UI widget (choices, sliders/calculators, charts, line/donut plots, safe vector diagrams, comparisons, checklists, architecture diagrams, callouts, grids, tabs, or accordions) inside MCP Apps-capable chat clients, with Markdown fallback for CLI hosts. Use selectively when interactive controls or structured visual comparison clearly outperform prose.",
+        "Render declarative MCP Apps UI with Markdown fallback. Leaves: choices (decisions), controls (variables), stats (KPIs), chart (breakdown bars), plot (line/bar/donut), svg (safe diagrams), compare (matrices), checklist (checks), timeline (steps), architecture (layers), callout (notes), code (config previews). Layouts: grid holds leaves; tabs/accordion hold leaves or one grid. Control IDs define variables. Use formula strings such as round(workers * 2, 1), string + suffix, and {{var}} in code templates. Never supply executable HTML or JavaScript.",
       inputSchema: UiSpecSchema,
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
@@ -63,10 +63,10 @@ export function createServer(): McpServer {
     {
       title: "Inspect Preset Intelligence UI",
       description:
-        "Renders one of the built-in Intelligence UI showcases (gpu-vram-tuner, runtime-compare, deploy-checklist, mcp-architecture, composable-workbench, svg-visual-lab).",
+        "Renders one of the built-in Intelligence UI showcases (gpu-vram-tuner, runtime-compare, deploy-checklist, mcp-architecture, composable-workbench, svg-visual-lab, agent-launch-kit).",
       inputSchema: z.object({
         preset: z
-          .enum(["gpu-vram-tuner", "runtime-compare", "deploy-checklist", "mcp-architecture", "composable-workbench", "svg-visual-lab"])
+          .enum(["gpu-vram-tuner", "runtime-compare", "deploy-checklist", "mcp-architecture", "composable-workbench", "svg-visual-lab", "agent-launch-kit"])
           .describe("Preset showcase identifier"),
       }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },

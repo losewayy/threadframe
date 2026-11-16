@@ -3,6 +3,7 @@ import test from "node:test";
 import { z } from "zod";
 import { PRESETS } from "../src/presets.js";
 import { UiStateStore } from "../src/runtime/core/state.js";
+import { interpolateCode } from "../src/runtime/display.js";
 import { evaluateFormula, evaluateNumericFormula } from "../src/runtime/formula.js";
 import { renderFallbackMarkdown } from "../src/schema/fallback.js";
 import { parsePartialUiSpec, UiSpecSchema, walkBlocks } from "../src/schema/uiSpec.js";
@@ -112,6 +113,9 @@ test("partial streams preserve valid blocks while top-level or nested trailing b
   for (const [unfinished, visible] of [
     [unfinishedControl, ["callout"]], [unfinishedTabs, ["callout"]],
     [unfinishedCanvas, ["callout", "svg"]], [unfinishedPlot, ["callout", "tabs"]],
+    [{ kind: "stats", items: [{ label: "Ready", value: 2 }, {}] }, ["callout", "stats"]],
+    [{ kind: "timeline", steps: [{ id: "a", title: "Ready", status: "done" }, { id: "b" }] }, ["callout", "timeline"]],
+    [{ kind: "code" }, ["callout"]],
   ] as const) {
     const parsed = parsePartialUiSpec({ title: "Streaming panel", blocks: [note, unfinished] });
     assert.equal(parsed.title, "Streaming panel");
@@ -121,6 +125,8 @@ test("partial streams preserve valid blocks while top-level or nested trailing b
     walkBlocks(parsed.blocks, (block) => {
       if (block.kind === "plot") assert.equal(block.points.length, 1);
       if (block.kind === "svg") assert.equal(block.elements.length, 1);
+      if (block.kind === "stats") assert.equal(block.items.length, 1);
+      if (block.kind === "timeline") assert.equal(block.steps.length, 1);
     });
   }
   const complete = nestedSpec();
@@ -261,9 +267,54 @@ test("actions route copy_state to the clipboard and send_message to the host wit
   assert.ok(statuses.at(-1)!.includes("Manual plan"));
 });
 
+test("content blocks validate boundaries and resolve scalar values and code without unsafe placeholders", () => {
+  const spec = UiSpecSchema.parse({ title: "Content contract", blocks: [
+    { kind: "controls", controls: [{ kind: "slider", id: "jobs", label: "Jobs", min: 1, max: 10, defaultValue: 3 }] },
+    { kind: "stats", items: [{ label: "Capacity", formula: "jobs * 2", unit: "slots", deltaFormula: "jobs - 1", warnAbove: 4 }] },
+    { kind: "code", language: "bash", template: "serve --jobs {{jobs}} --optional {{missing}}", caption: "Review before use" },
+    { kind: "timeline", steps: [{ id: "check", title: "Check capacity", status: "active", detail: "Measure the workload" }] },
+  ] });
+  const markdown = renderFallbackMarkdown(spec);
+  for (const word of ["Capacity", "slots", "warn", "serve --jobs 3", "{{missing}}", "Check capacity", "Measure the workload"]) assert.ok(markdown.includes(word));
+  assert.match(markdown, /\b6\b/);
+  assert.ok(!markdown.includes("undefined") && !markdown.includes("NaN"));
+  const state = new UiStateStore();
+  state.initDefaults(spec.blocks);
+  const code = spec.blocks.find((block) => block.kind === "code");
+  assert.ok(code?.kind === "code");
+  state.scope.jobs = 7;
+  assert.ok(interpolateCode(code.template!, state.scope).includes("--jobs 7"));
+  assert.ok(interpolateCode("{{constructor}}", state.scope).includes("{{constructor}}"));
+  for (const block of [
+    { kind: "stats", columns: 5, items: [{ label: "Value", value: 1 }] },
+    { kind: "timeline", steps: [{ id: "bad", title: "Bad", status: "unknown" }] },
+    { kind: "code" }, { kind: "code", code: "text", language: "bash\nscript" },
+  ]) assert.equal(UiSpecSchema.safeParse({ title: "Invalid content", blocks: [block] }).success, false);
+});
+
+test("timeline selection survives appended steps and new streaming objects", () => {
+  const original = UiSpecSchema.parse({ title: "Progress", blocks: [{ kind: "timeline", id: "progress", steps: [
+    { id: "a", title: "Prepare", status: "done", detail: "Prepared" },
+    { id: "b", title: "Measure", status: "active", detail: "Measuring" },
+  ] }] });
+  const state = new UiStateStore();
+  state.initDefaults(original.blocks);
+  const key = state.containerKey(original.blocks[0]);
+  assert.equal(state.timelineSelections.get(key), "b");
+  state.timelineSelections.set(key, "a");
+  const appended = UiSpecSchema.parse({ title: "Progress", blocks: [{ kind: "timeline", id: "progress", steps: [
+    { id: "a", title: "Prepare", status: "done", detail: "Prepared" },
+    { id: "b", title: "Measure", status: "done", detail: "Measured" },
+    { id: "c", title: "Launch", status: "pending" },
+  ] }] });
+  state.initDefaults(appended.blocks);
+  assert.equal(state.timelineSelections.get(key), "a");
+});
+
 test("all built-in presets conform to UiSpecSchema and render non-empty Markdown fallback", () => {
   assert.ok(PRESETS["composable-workbench"]);
   assert.ok(PRESETS["svg-visual-lab"]);
+  assert.ok(PRESETS["agent-launch-kit"]);
   for (const [key, spec] of Object.entries(PRESETS)) {
     const validated = UiSpecSchema.parse(spec);
     assert.ok(validated.blocks.length >= 1, `${key} should have at least one block`);

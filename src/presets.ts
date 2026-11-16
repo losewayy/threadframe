@@ -475,6 +475,72 @@ export const PRESETS: Record<string, UiSpec> = {
     ],
     actions: [{ label: "Use visual settings", promptTemplate: "Use these visual experiment settings: {{state_summary}}" }],
   },
+  "agent-launch-kit": {
+    title: "Inference Service Launch Kit",
+    subtitle: "Configure planning targets, inspect the pipeline, and prepare a launch command.",
+    badge: "Launch Planner",
+    blocks: [
+      {
+        kind: "stats", columns: 3, title: "Configured targets",
+        items: [
+          { label: "Throughput target", formula: "workers * per_worker_target", unit: "req/s", deltaFormula: "(workers - 1) * per_worker_target", tone: "primary" },
+          { label: "Hourly cost ceiling", formula: "workers * hourly_budget", precision: 2, unit: "USD/h", tone: "accent" },
+          { label: "Latency budget", formula: "latency_budget", unit: "ms", warnAbove: 150, tone: "success" },
+        ],
+      },
+      {
+        kind: "controls", title: "Deployment inputs",
+        controls: [
+          { kind: "slider", id: "workers", label: "GPU count", min: 1, max: 4, defaultValue: 1 },
+          { kind: "select", id: "quant", label: "Model quantization", options: ["awq", "gptq"], defaultValue: "awq" },
+          { kind: "slider", id: "concurrency", label: "Concurrent sequences", min: 1, max: 16, defaultValue: 4 },
+          { kind: "slider", id: "per_worker_target", label: "Per-GPU throughput target", min: 1, max: 64, defaultValue: 8, unit: "req/s" },
+          { kind: "slider", id: "hourly_budget", label: "Per-GPU hourly budget", min: 0.1, max: 3, step: 0.1, defaultValue: 0.5, unit: "USD" },
+          { kind: "slider", id: "latency_budget", label: "Latency budget", min: 20, max: 200, step: 10, defaultValue: 100, unit: "ms" },
+        ],
+      },
+      {
+        kind: "callout", tone: "info",
+        body: "These are configurable planning targets, not measured benchmarks. Verify capacity, model compatibility, and resource limits before launching.",
+      },
+      {
+        kind: "tabs", id: "launch-views", defaultTab: "plan",
+        tabs: [
+          { id: "plan", label: "Capacity & pipeline", children: [{ kind: "grid", columns: 2, children: [
+            { kind: "plot", mode: "bar", title: "Throughput targets", unit: "req/s", precision: 0,
+              points: [
+                { label: "Per GPU", formula: "per_worker_target", tone: "accent" },
+                { label: "Total", formula: "workers * per_worker_target", tone: "primary" },
+              ],
+            },
+            { kind: "svg", title: "Request pipeline", width: 360, height: 240, caption: "The worker pool expands with GPU count.", elements: [
+              { type: "rect", x: 20, y: 25, width: 120, height: 44, rx: 6, fill: "accent", opacity: 0.25 },
+              { type: "text", x: 80, y: 52, text: "Requests", textAnchor: "middle", fontSize: 14 },
+              { type: "polyline", points: "80,75 80,110 180,110 180,135", stroke: "muted", strokeWidth: 2 },
+              { type: "polygon", points: "174,130 186,130 180,140", fill: "muted" },
+              { type: "rect", x: 70, y: 145, widthFormula: "150 + workers * 12", height: 50, rx: 6, fill: "primary", opacity: 0.3 },
+              { type: "text", x: 90, y: 176, textFormula: "workers + ' GPU workers'", fontSize: 14 },
+            ] },
+          ] }] },
+          { id: "launch", label: "Readiness & command", children: [{ kind: "grid", columns: 2, children: [
+            { kind: "timeline", id: "launch-steps", title: "Launch sequence", steps: [
+              { id: "configure", title: "Set targets", status: "done", meta: "Planning", detail: "Set capacity and cost targets for the deployment." },
+              { id: "validate", title: "Validate the workload", status: "active", meta: "Measure", detail: "Measure real throughput and latency with the selected model and GPU topology." },
+              { id: "deploy", title: "Launch the service", status: "pending", meta: "Release", detail: "Replace the model placeholder, review the command, and launch in your own environment." },
+            ] },
+            { kind: "code", title: "Launch command", language: "bash",
+              template: "vllm serve <compatible-model-id> --tensor-parallel-size {{workers}} --max-num-seqs {{concurrency}} --quantization {{quant}}",
+              caption: "Template only. Choose a compatible model and installed runtime; review before executing.",
+            },
+          ] }] },
+        ],
+      },
+    ],
+    actions: [
+      { label: "Send launch plan", kind: "send_message", promptTemplate: "Review this deployment plan: {{state_summary}}" },
+      { label: "Copy plan", kind: "copy_state", promptTemplate: "Deployment plan: {{state_summary}}" },
+    ],
+  },
 };
 
 export type PresetKey = keyof typeof PRESETS;

@@ -11,6 +11,7 @@ export class UiStateStore implements UiState {
   readonly selectedChoiceIds = new Set<string>();
   readonly tabSelections = new Map<string, string>();
   readonly accordionOpen = new Map<string, boolean>();
+  readonly timelineSelections = new Map<string, string>();
   private readonly containerKeys = new WeakMap<UiBlock, string>();
   selectedNodeId: string | null = null;
   private reactiveBindings: ReactiveBinding[] = [];
@@ -54,11 +55,16 @@ export class UiStateStore implements UiState {
   initDefaults(blocks: UiBlock[]): void {
     let containerIndex = 0;
     walkBlocks(blocks, (block) => {
-      if (block.kind === "tabs" || block.kind === "accordion") {
+      if (block.kind === "tabs" || block.kind === "accordion" || block.kind === "timeline") {
         // Ordinals distinguish anonymous containers while append-only streams keep them stable.
         const key = JSON.stringify([block.kind, block.id ?? containerIndex]);
         containerIndex++;
         this.containerKeys.set(block, key);
+        if (block.kind === "timeline" && !this.timelineSelections.has(key)) {
+          const initial = block.steps.find((step) => step.status === "active" && step.detail)
+            ?? block.steps.find((step) => step.detail);
+          if (initial) this.timelineSelections.set(key, initial.id);
+        }
         if (block.kind === "tabs" && !this.tabSelections.has(key)) {
           const initial = block.tabs.find((tab) => tab.id === block.defaultTab) ?? block.tabs[0];
           this.tabSelections.set(key, initial.id);
