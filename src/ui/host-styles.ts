@@ -6,12 +6,12 @@ export function syncHostStyles(ctx: McpUiHostContext | undefined): void {
   if (ctx.theme) applyDocumentTheme(ctx.theme);
   if (ctx.styles?.variables) applyHostStyleVariables(ctx.styles.variables);
   const fonts = ctx.styles?.css?.fonts;
-  if (fonts) {
+  if (fonts && typeof CSSStyleSheet !== "undefined") {
     // Host font faces may use installed fonts, but must never trigger network loads.
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(fonts);
     const localFaces = [...sheet.cssRules].filter((rule) => rule.type === CSSRule.FONT_FACE_RULE
-      && !/url\s*\(|@import/i.test(rule.cssText)).map((rule) => rule.cssText);
+      && !/url\s*\(|@import|var\s*\(|attr\s*\(/i.test(rule.cssText)).map((rule) => rule.cssText);
     if (localFaces.length) applyHostFonts(localFaces.join("\n"));
   }
 }

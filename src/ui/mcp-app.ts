@@ -25,7 +25,7 @@ function resolveSpecPayload(raw: unknown): unknown {
   return raw;
 }
 
-const app = new App({ name: "Intelligence UI", version: "0.1.0" });
+const app = new App({ name: "Intelligence UI", version: "0.2.0" });
 
 let currentStandaloneSpec: UiSpec | null = window.__INTELLIGENCE_UI_SPEC__ ?? null;
 let replayTimers: number[] = [];

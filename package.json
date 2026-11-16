@@ -1,6 +1,6 @@
 {
   "name": "intelligence-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Open-source streaming Intelligence UI runtime and MCP Apps server for inline interactive agent interfaces",
   "license": "MIT",
@@ -26,7 +26,10 @@
     "dev": "tsx main.ts",
     "start": "pnpm run build && node dist/main.js",
     "start:stdio": "node dist/main.js --stdio",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm run build && pnpm test",
+    "prepack": "pnpm run check"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "2.0.0",
@@ -46,5 +49,22 @@
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
     "vite-plugin-singlefile": "^2.3.0"
-  }
+  },
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist/",
+    "src/ui/playground.html",
+    "docs/",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "AGENTS.md"
+  ],
+  "screenshots": [
+    "docs/demo.gif"
+  ]
 }

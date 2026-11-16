@@ -5,3 +5,10 @@ dist/
 .env
 .env.*
 coverage/
+*.tgz
+*.html
+!/mcp-app.html
+!/src/ui/playground.html
+out/
+exports/
+.cache/

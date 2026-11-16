@@ -1,0 +1,22 @@
+{
+  "title": "Reactive launch settings",
+  "blocks": [
+    {
+      "kind": "controls",
+      "controls": [
+        { "kind": "slider", "id": "workers", "label": "Workers", "min": 1, "max": 8, "defaultValue": 2 }
+      ]
+    },
+    {
+      "kind": "stats",
+      "items": [{ "label": "Parallel slots", "formula": "workers * 4", "unit": "slots" }]
+    },
+    {
+      "kind": "code",
+      "language": "bash",
+      "template": "service --workers {{workers}}",
+      "caption": "Illustrative configuration preview; the renderer never executes this command."
+    }
+  ],
+  "actions": [{ "label": "Copy settings", "kind": "copy_state" }]
+}
