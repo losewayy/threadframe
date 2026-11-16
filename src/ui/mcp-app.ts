@@ -1,5 +1,7 @@
 import { App } from "@modelcontextprotocol/ext-apps";
 import { syncHostStyles } from "./host-styles.js";
+import { syncEmbedTheme } from "./embed-theme.js";
+import type { RenderReport } from "../runtime/core/types.js";
 import { PRESETS } from "../presets.js";
 import { IntelligenceUiRenderer } from "../runtime/renderer.js";
 import type { UiSpec } from "../schema/uiSpec.js";
@@ -8,6 +10,7 @@ import "./styles.css";
 declare global {
   interface Window {
     __INTELLIGENCE_UI_SPEC__?: UiSpec;
+    __INTELLIGENCE_UI_EMBED__?: boolean;
   }
 }
 
@@ -28,6 +31,16 @@ function resolveSpecPayload(raw: unknown): unknown {
 const app = new App({ name: "Intelligence UI", version: "0.2.0" });
 
 let currentStandaloneSpec: UiSpec | null = window.__INTELLIGENCE_UI_SPEC__ ?? null;
+const useHostBridge = !currentStandaloneSpec && window.parent !== window;
+if (window.__INTELLIGENCE_UI_EMBED__ === true) syncEmbedTheme();
+let hostConnected = false;
+let lastReport: RenderReport | undefined;
+function reportRender(report: RenderReport): void {
+  lastReport = report;
+  document.documentElement.dataset.iuiRenderStatus = report.status;
+  window.dispatchEvent(new CustomEvent("intelligence-ui:render", { detail: report }));
+  if (hostConnected) void app.sendLog({ level: report.status === "error" ? "error" : "info", data: report }).catch(() => {});
+}
 let replayTimers: number[] = [];
 
 function clearReplayTimers(): void {
@@ -63,12 +76,13 @@ function runStandaloneProgressiveBuild(spec: UiSpec): void {
 }
 
 const renderer = new IntelligenceUiRenderer(root, {
-  sendMessage: window.parent !== window ? async (text: string) => {
+  sendMessage: useHostBridge ? async (text: string) => {
       await app.sendMessage({
         role: "user",
         content: [{ type: "text", text }],
       });
   } : undefined,
+  onRender: reportRender,
   onReplayRequested: currentStandaloneSpec
     ? () => {
         if (currentStandaloneSpec) {
@@ -111,8 +125,12 @@ app.ontoolresult = (result) => {
 
 app.onhostcontextchanged = (ctx) => syncHostStyles(ctx);
 
-if (window.parent !== window) {
-  void app.connect().then(() => syncHostStyles(app.getHostContext())).catch(() => {
+if (useHostBridge) {
+  void app.connect().then(() => {
+    hostConnected = true;
+    syncHostStyles(app.getHostContext());
+    if (lastReport) reportRender(lastReport);
+  }).catch(() => {
     // Standalone / non-MCP iframe fallback if parent does not speak MCP Apps JSON-RPC
     if (!currentStandaloneSpec) {
       currentStandaloneSpec = PRESETS["gpu-vram-tuner"];

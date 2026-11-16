@@ -48,6 +48,15 @@ button:focus-visible, input:focus-visible {
   gap: 16px;
 }
 
+html[data-iui-embed="true"] body {
+  background: transparent;
+}
+
+html[data-iui-embed="true"] .iui-shell {
+  padding: 10px;
+  gap: 12px;
+}
+
 .iui-header {
   display: flex;
   justify-content: space-between;

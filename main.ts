@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { createServer, readUiBundleHtml } from "./server.js";
 import { PRESETS } from "./src/presets.js";
 import { UiSpecSchema, type UiSpec } from "./src/schema/uiSpec.js";
+import { injectStandaloneHtml } from "./src/export.js";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,22 +20,19 @@ const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
  * Exports any preset or JSON UiSpec into a standalone single-file HTML document
  * suitable for Antigravity <agent-embed> or offline browser sharing.
  */
-async function exportStandaloneHtml(source: string, outputPath: string): Promise<void> {
+async function exportStandaloneHtml(source: string, outputPath: string, embed: boolean): Promise<void> {
   let spec: UiSpec;
-  if (source in PRESETS) {
+  if (Object.hasOwn(PRESETS, source)) {
     spec = PRESETS[source];
   } else {
-    const raw = await fs.readFile(path.resolve(source), "utf-8");
+    const chunks: Buffer[] = [];
+    if (source === "-") for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+    const raw = source === "-" ? Buffer.concat(chunks).toString("utf8") : await fs.readFile(path.resolve(source), "utf-8");
     spec = UiSpecSchema.parse(JSON.parse(raw));
   }
 
   const bundleHtml = await readUiBundleHtml();
-  // Escape closing script tags inside JSON payload before injecting inline
-  const safeJson = JSON.stringify(spec).replace(/<\/script/gi, "<\\/script");
-  const injected = bundleHtml.replace(
-    "<main id=\"app-root\"></main>",
-    `<main id="app-root"></main>\n  <script>window.__INTELLIGENCE_UI_SPEC__ = ${safeJson};</script>`,
-  );
+  const injected = injectStandaloneHtml(bundleHtml, spec, { embed });
 
   await fs.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
   await fs.writeFile(path.resolve(outputPath), injected, "utf-8");
@@ -134,18 +132,19 @@ export async function startHttpServer(makeServer: () => McpServer): Promise<void
 async function main(): Promise<void> {
   const exportIdx = process.argv.indexOf("--export");
   if (exportIdx !== -1) {
+    if (process.argv.includes("--stdio")) throw new Error("--export and --stdio cannot be combined");
     const source = process.argv[exportIdx + 1];
     const out = process.argv[exportIdx + 2];
-    if (!source || !out) {
-      console.error("Usage: intelligence-ui --export <preset|spec.json> <output.html>");
+    if (!source || !out || out.startsWith("--")) {
+      console.error("Usage: intelligence-ui --export <preset|spec.json|-> <output.html> [--embed]");
       process.exit(1);
     }
-    await exportStandaloneHtml(source, out);
+    await exportStandaloneHtml(source, out, process.argv.includes("--embed"));
     return;
   }
 
   if (process.argv.includes("--stdio")) {
-    await createServer().connect(new StdioServerTransport());
+    await createServer({ localStdio: true }).connect(new StdioServerTransport());
     return;
   }
 

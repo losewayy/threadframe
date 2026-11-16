@@ -85,13 +85,27 @@ Claude Desktop 或其他 stdio 客户端先构建，再配置：
 
 将 `<repository>` 替换为客户端可访问的检出目录，修改配置后重启客户端。stdio 配置不要启动 HTTP 入口。HTTP 客户端可在运行 `pnpm dev` 或 `node dist/main.js` 后，将 Streamable HTTP 地址设为 `http://127.0.0.1:3001/mcp`。服务只绑定本机回环地址，公网部署、身份验证和 TLS 不在当前服务的职责内。
 
+两个工具会按客户端实际声明的 UI 能力分流。原生 MCP Apps 客户端保持原有 Markdown 与 structuredContent 返回，不增加导出提示，也不写文件，即使填写 embedPath 也会忽略。没有 UI 能力时，名称匹配 Antigravity、Jetski、Cascade 则进入 antigravity 模式，其余进入 markdown 模式。环境变量 `INTELLIGENCE_UI_HOST=antigravity` 只覆写非 UI 分支，不覆盖已声明的 MCP Apps 支持；识别名称不等于保证客户端支持某个嵌入标签。
+
+本地 `--stdio` 模式下，两个工具均可选填 `embedPath`，将内嵌页写入指定的本地 `.html` 产物路径。允许跨目录，禁止设备路径、保留设备名、备用数据流与其他后缀；HTTP 工具调用始终禁止写文件。返回值只追加识别模式和 `file:///` 文件 URI，不塞入 HTML 源码。例如，非 UI 本地客户端可传 `{"preset":"agent-launch-kit","embedPath":"artifacts/launch-kit.html"}` 调用 inspect_preset_ui，再由客户端按自己的方式展示产物。指定位置已有的普通 HTML 文件会被覆盖。
+
+render_intelligence_ui 的说明内含完整 controls/stats/svg 最小示例；`intelligence-ui://examples/svg` 资源提供容量条、流程箭头和动态尺寸三个示例。服务端线上 Schema 保留所有积木分支且没有 `$ref`；部分客户端会简化模型看到的复杂联合类型，可参照示例填字段。
+
 ```sh
 node dist/main.js --stdio
 node dist/main.js --export agent-launch-kit out/launch-kit.html
 node dist/main.js --export docs/example.json out/custom.html
+node dist/main.js --export agent-launch-kit out/embed.html --embed
+cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 ```
 
-导出文件可以直接打开，脚本和样式全部内联。离线页底部动作会复制文本，代码卡也有独立复制按钮；浏览器的安全上下文和权限仍然适用。页面里的状态不会写回源 JSON。
+导出语法为 `--export <preset|spec.json|-> <output.html> [--embed]`。`-` 从标准输入读取 JSON 并校验；PowerShell 可用 `Get-Content -Raw docs/example.json` 替代 cat。
+
+导出文件可以直接打开，脚本和样式全部内联。导出页即使放进 iframe 也不会建立 MCP Apps 连接或发宿主消息；底部动作复制文本，代码卡也有独立复制按钮。浏览器的安全上下文和权限仍然适用，复制被拒会明确提示。页面里的状态不会写回源 JSON。
+
+`--embed` 额外启用透明背景和紧凑间距。主题同步观察 light/dark 类名与可访问父页面的主题属性，也接受 `themechange` 自定义事件，detail 可为 `"light"` / `"dark"` 或 `{theme:"light"}`。跨域父页面无法读取，宿主需自行将主题写到内嵌文档或投递文档内事件；没有信号时跟随系统主题。
+
+渲染完成、等待局部输入或失败分别报告 ready、partial、error，以及已显示的顶层积木数和待完成数量。文档发出 `intelligence-ui:render` 事件并更新 `data-iui-render-status`；已连接的 MCP Apps 还使用 SDK 日志通道反馈，可在 Playground 的桥接日志查看。渲染异常标明积木位置。工具返回成功只代表服务端成功，不等于界面已经显示；确认不阻塞工具返回，纯文本客户端也不会虚报界面显示成功。
 
 ## 变量、公式与安全边界
 

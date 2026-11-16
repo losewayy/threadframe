@@ -29,11 +29,16 @@ export class IntelligenceUiRenderer {
   }
 
   renderPartial(raw: unknown, streaming: boolean): void {
-    this.renderParsed(parsePartialUiSpec(raw), streaming);
+    try {
+      this.renderParsed(parsePartialUiSpec(raw), streaming);
+    } catch (error) {
+      this.bridge.onRender?.({ status: "error", blockCount: this.blockViews.length, pendingBlockCount: 0, message: (error as Error).message });
+      throw error;
+    }
   }
 
   renderFull(spec: UiSpec): void {
-    this.renderParsed(parsePartialUiSpec(spec), false);
+    this.renderPartial(spec, false);
   }
 
   private renderParsed(parsed: PartialUiSpecResult, streaming: boolean): void {
@@ -50,7 +55,8 @@ export class IntelligenceUiRenderer {
       let view = this.blockViews[index];
       if (!view || view.signature !== signature) {
         const previousNode = view?.node;
-        view = this.createBlockView(block, signature);
+        try { view = this.createBlockView(block, signature); }
+        catch (error) { throw new Error(`blocks.${index} (${block.kind}): ${(error as Error).message}`); }
         previousNode?.remove();
       }
       const position = shell.children[index + 1] ?? null;
@@ -63,6 +69,8 @@ export class IntelligenceUiRenderer {
     this.updateSkeleton(shell, streaming || parsed.pendingBlockCount > 0);
     this.updateFooter(shell, parsed, streaming);
     this.state.notifyScopeChange();
+    this.bridge.onRender?.({ status: streaming || parsed.pendingBlockCount > 0 ? "partial" : "ready",
+      blockCount: nextViews.length, pendingBlockCount: parsed.pendingBlockCount });
   }
 
   private createBlockView(block: UiBlock, signature: string): BlockView {

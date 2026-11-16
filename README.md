@@ -86,7 +86,13 @@ Presets are editable demonstrations. Planning targets and memory estimates are n
 
 ## MCP integration
 
-The server exposes `render_intelligence_ui` (custom UiSpec), `inspect_preset_ui` (a preset) and `ui://intelligence-ui/view.html`. Tools return both `structuredContent` and Markdown. Embedding requires client support for MCP Apps; text-only clients receive the Markdown result.
+The server exposes `render_intelligence_ui` (custom UiSpec), `inspect_preset_ui` (a preset) and `ui://intelligence-ui/view.html`. Both tools detect the connected client's advertised UI capability. Native MCP Apps clients keep the original Markdown and `structuredContent` response without export hints or file writes, even if `embedPath` is supplied.
+
+Without UI capability, names matching Antigravity, Jetski or Cascade select `antigravity` mode; other clients select `markdown`. `INTELLIGENCE_UI_HOST=antigravity` can override the non-UI branch, but never overrides advertised MCP Apps support. These modes are capability-based fallbacks, not guarantees that a client implements a particular embed tag.
+
+In local `--stdio` mode, either tool accepts an optional `embedPath` pointing to a local `.html` artifact file. The server writes an embed-ready single file and returns its `file:///` URI, not the HTML source. Cross-directory artifact paths are allowed; device paths, reserved names, alternate streams and other extensions are rejected. HTTP never permits tool-triggered file writes. For example, call `inspect_preset_ui` with `{"preset":"agent-launch-kit","embedPath":"artifacts/launch-kit.html"}` from a local non-UI client. The client decides how to embed the resulting artifact. Existing regular HTML files at the requested path are overwritten.
+
+The `render_intelligence_ui` description includes a complete controls/stats/svg example. The resource `intelligence-ui://examples/svg` provides editable capacity, flow and size diagrams. The wire schema retains all block variants without `$ref`; some clients may simplify complex union types in model-facing tool definitions, so consult the example instead of guessing fields.
 
 For Claude Desktop or another stdio client, build first and configure:
 
@@ -109,9 +115,17 @@ For an HTTP-capable MCP client, run `pnpm dev` or `node dist/main.js` and config
 node dist/main.js --stdio
 node dist/main.js --export agent-launch-kit out/launch-kit.html
 node dist/main.js --export docs/example.json out/custom.html
+node dist/main.js --export agent-launch-kit out/embed.html --embed
+cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 ```
 
-Open exported HTML directly: all scripts and styles are inline. Offline footer actions copy instead of silently sending to an absent host. Code cards have a Copy button. Browser clipboard permissions still apply. Page state stays local and is not written back to the source JSON.
+Export syntax: `--export <preset|spec.json|-> <output.html> [--embed]`. `-` reads and validates JSON from stdin; PowerShell users can pipe `Get-Content -Raw docs/example.json` instead of `cat`.
+
+Open exported HTML directly: all scripts and styles are inline. Exported pages, including iframe embeds, never connect to MCP Apps or send host messages. Footer actions copy and code cards have a Copy button; browser clipboard permissions still apply and denials are visible. Page state stays local and is not written back to the source JSON.
+
+`--embed` additionally enables a transparent background and compact spacing. Theme synchronization observes light/dark classes and accessible parent theme attributes, and accepts a `themechange` CustomEvent with `detail: "light"` / `"dark"` or `{theme: "light"}`. Cross-origin parent styles cannot be inspected: such hosts must set the embedded document's theme or deliver its theme event through their own integration. Without a signal, system light/dark preferences apply.
+
+Rendering reports `ready`, `partial` or `error`, rendered top-level block count and pending block count through the document's `intelligence-ui:render` event and `data-iui-render-status`. Connected MCP Apps views also send reports through SDK logging, visible in Playground bridge activity; render exceptions identify the block position. A tool result alone proves server success, not client display. No render acknowledgment blocks the tool response, and text-only clients cannot confirm interactive rendering.
 
 ## Variables and formulas
 

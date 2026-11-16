@@ -4,6 +4,14 @@ import type { VarScope } from "../formula.js";
 export interface RendererHostBridge {
   sendMessage?: (text: string) => Promise<void> | void;
   onReplayRequested?: () => void;
+  onRender?: (report: RenderReport) => void;
+}
+
+export interface RenderReport {
+  status: "ready" | "partial" | "error";
+  blockCount: number;
+  pendingBlockCount: number;
+  message?: string;
 }
 
 export interface ReactiveBinding {

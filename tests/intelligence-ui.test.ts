@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { InMemoryTransport } from "@modelcontextprotocol/server";
+import type { ClientCapabilities, JSONRPCRequest } from "@modelcontextprotocol/server";
+import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { createServer } from "../server.js";
+import { detectClientAdapter } from "../src/clientAdapter.js";
+import { injectStandaloneHtml } from "../src/export.js";
+import { SVG_EXAMPLES } from "../src/examples.js";
 import { PRESETS } from "../src/presets.js";
 import { UiStateStore } from "../src/runtime/core/state.js";
 import { interpolateCode } from "../src/runtime/display.js";
@@ -324,4 +334,108 @@ test("all built-in presets conform to UiSpecSchema and render non-empty Markdown
     assert.ok(!md.includes("NaN"), `${key} markdown contains NaN`);
     assert.ok(!md.includes("undefined"), `${key} markdown contains undefined`);
   }
+  for (const spec of Object.values(SVG_EXAMPLES)) {
+    assert.ok(renderFallbackMarkdown(UiSpecSchema.parse(spec)).includes(spec.title));
+  }
+});
+
+const appsCapabilities: ClientCapabilities = { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [RESOURCE_MIME_TYPE] } } };
+
+test("client adaptation prefers advertised UI support and falls back by host identity", () => {
+  assert.equal(detectClientAdapter({ name: "Antigravity" }, appsCapabilities, "antigravity"), "mcp-apps");
+  for (const name of ["Antigravity", "jetski", "Cascade"]) assert.equal(detectClientAdapter({ name }, {}), "antigravity");
+  assert.equal(detectClientAdapter({ name: "CLI" }, {}, "antigravity"), "antigravity");
+  assert.equal(detectClientAdapter({ name: "CLI" }, {}), "markdown");
+  assert.equal(detectClientAdapter(undefined, undefined), "markdown");
+});
+
+test("standalone injection preserves literal code and opts into embed without script breakout", () => {
+  const spec = UiSpecSchema.parse({ title: "Literal code", blocks: [{ kind: "code", code: '</ScRiPt><script>alert(1)</script><!-- $& $\u0060' }] });
+  const bundle = '<main id="app-root"></main>';
+  for (const embed of [false, true]) {
+    const html = injectStandaloneHtml(bundle, spec, { embed });
+    assert.equal((html.match(/<script>/g) ?? []).length, 1);
+    const payload = html.split("window.__INTELLIGENCE_UI_SPEC__ = ")[1].split(";")[0];
+    assert.deepEqual(JSON.parse(payload), spec);
+    assert.equal(html.includes("__INTELLIGENCE_UI_EMBED__ = true"), embed);
+  }
+});
+
+async function connectTestClient(name: string, capabilities: ClientCapabilities, localStdio = false) {
+  const server = createServer({ localStdio });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await clientTransport.start();
+  let id = 0;
+  const request = (method: string, params: JSONRPCRequest["params"]) => new Promise<Record<string, unknown>>((resolve, reject) => {
+    const requestId = ++id;
+    const timer = setTimeout(() => reject(new Error(`Timed out: ${method}`)), 5000);
+    clientTransport.onmessage = (message) => {
+      if (!("id" in message) || message.id !== requestId) return;
+      clearTimeout(timer);
+      if ("result" in message) resolve(message.result);
+      else if ("error" in message) reject(new Error(JSON.stringify(message.error)));
+    };
+    void clientTransport.send({ jsonrpc: "2.0", id: requestId, method, params }).catch((error) => { clearTimeout(timer); reject(error); });
+  });
+  try {
+    await request("initialize", { protocolVersion: "2025-11-25", capabilities, clientInfo: { name, version: "1.0.0" } });
+    await clientTransport.send({ jsonrpc: "2.0", method: "notifications/initialized" });
+  } catch (error) { await server.close(); throw error; }
+  return { request, close: () => server.close() };
+}
+
+test("real MCP sessions preserve native results and restrict embed writes to explicit local exports", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "intelligence-ui-"));
+  const spec = UiSpecSchema.parse({ title: "Adapter contract", blocks: [{ kind: "callout", body: "Local export" }] });
+  const resultSchema = z.object({ content: z.array(z.object({ type: z.literal("text"), text: z.string() })), isError: z.boolean().optional(), structuredContent: UiSpecSchema.optional() });
+  try {
+    for (const scenario of [
+      { name: "Native", capabilities: appsCapabilities, local: true, written: false },
+      { name: "Antigravity", capabilities: {}, local: true, written: true },
+      { name: "Terminal", capabilities: {}, local: true, written: true },
+      { name: "HTTP", capabilities: {}, local: false, written: false },
+    ]) {
+      const client = await connectTestClient(scenario.name, scenario.capabilities, scenario.local);
+      try {
+        const embedPath = path.join(directory, `${scenario.name} space.html`);
+        const result = resultSchema.parse(await client.request("tools/call", { name: "render_intelligence_ui", arguments: { ...spec, embedPath } }));
+        if (scenario.name === "Native") {
+          assert.deepEqual(result.structuredContent, spec);
+          assert.equal(result.content[0].text, renderFallbackMarkdown(spec));
+          const listing = await client.request("tools/list", {});
+          const tools = z.array(z.object({ name: z.string(), inputSchema: z.record(z.string(), z.unknown()) })).parse(listing.tools);
+          const schema = JSON.stringify(tools.find((tool) => tool.name === "render_intelligence_ui")!.inputSchema);
+          for (const kind of ["controls", "stats", "svg", "timeline", "grid"]) assert.ok(schema.includes(`"const":"${kind}"`));
+          assert.ok(!schema.includes('"$ref"'));
+          const examples = await client.request("resources/read", { uri: "intelligence-ui://examples/svg" });
+          const resources = z.array(z.object({ text: z.string() })).parse(examples.contents);
+          for (const example of Object.values(JSON.parse(resources[0].text))) UiSpecSchema.parse(example);
+        } else if (scenario.local) {
+          assert.equal(result.isError, undefined);
+          assert.ok(result.content[0].text.includes("file:///"));
+          const html = await fs.readFile(embedPath, "utf8");
+          assert.doesNotMatch(html, /<script\b[^>]*\bsrc\s*=/i);
+          assert.ok(html.includes("window.__INTELLIGENCE_UI_EMBED__ = true"));
+          assert.ok(html.includes(spec.title));
+        } else {
+          assert.equal(result.isError, true);
+          assert.ok(result.content[0].text.includes("local --stdio"));
+        }
+        if (!scenario.written) await assert.rejects(fs.access(embedPath));
+        if (scenario.name === "Antigravity") {
+          for (const target of ["bad.json", "NUL.html", "CON/file.html", "device.html:stream", "\\\\.\\device.html"]) {
+            const rejected = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_ui", arguments: { preset: "agent-launch-kit", embedPath: target.startsWith("\\\\") ? target : path.join(directory, target) } }));
+            assert.equal(rejected.isError, true, target);
+          }
+          const presetPath = path.join(directory, "preset.html");
+          const preset = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_ui", arguments: { preset: "agent-launch-kit", embedPath: presetPath } }));
+          assert.equal(preset.isError, undefined);
+          assert.ok((await fs.readFile(presetPath, "utf8")).includes("__INTELLIGENCE_UI_SPEC__"));
+          const noFile = resultSchema.parse(await client.request("tools/call", { name: "render_intelligence_ui", arguments: spec }));
+          assert.ok(noFile.content[0].text.includes("embedPath"));
+        }
+      } finally { await client.close(); }
+    }
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });

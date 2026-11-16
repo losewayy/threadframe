@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Capability-based native MCP Apps, Antigravity and Markdown response adapters.
+- Explicit local-stdio HTML artifact export, plus CLI stdin input and compact transparent --embed output.
+- Safe vector example resource, complete tool usage example and non-blocking UI render diagnostics.
+
+### Fixed
+
+- Exported iframe pages skip MCP Apps connections and use local clipboard actions.
+- Embedded pages synchronize accessible host themes and document theme events.
+- Source-mode servers read the compiled inline bundle rather than the development HTML entry.
+
 ## [0.2.0] - 2026-11-16
 
 ### Added
