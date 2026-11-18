@@ -15,11 +15,12 @@ import type { UiSpec } from "./src/schema/uiSpec.js";
 import { detectClientAdapter } from "./src/clientAdapter.js";
 import { injectStandaloneHtml } from "./src/export.js";
 import { writeEmbedFile } from "./src/embedFile.js";
-import { SVG_EXAMPLES, RECIPES } from "./src/examples.js";
+import { SVG_EXAMPLES, RECIPES, MARKUP_RECIPES } from "./src/examples.js";
 import { VERSION } from "./src/version.js";
 import { CalculatorInputSchema, DecisionInputSchema, DiagramInputSchema, compileCalculator, compileDecision, compileDiagram } from "./src/compile.js";
 import { SnapshotSchema, readSnapshot, writeSnapshot } from "./src/snapshot.js";
 import { resolveSafeFilePath } from "./src/pathSafety.js";
+import { compileMarkup, MarkupInputSchema } from "./src/schema/markup.js";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const UI_BUNDLE_PATH = path.resolve(THIS_DIR, import.meta.url.endsWith(".ts") ? "dist/mcp-app.html" : "mcp-app.html");
@@ -94,11 +95,33 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     {
       title: "Render Custom ThreadFrame",
       description:
-        'Render a fully custom interactive card with the low-level UiSpec schema. Prefer present_calculator for parameter tuning, present_decision for picking among 2-4 options, and present_diagram for node/edge flows; use this tool only when the compact tools cannot express the layout. Blocks: choices, controls, stats, chart, plot, svg, compare, checklist, timeline, architecture, graph, table, callout, code; containers: grid holds leaves, tabs/accordion hold leaves or one grid. plot accepts discrete points, or parameterized curves in line mode: curves (label + formula), xMin/xMax, optional xVariable (default x) and samples; undefined or non-finite samples break the line into segments. graph auto-lays nodes/edges without manual coordinates, and table supports sortable columns plus keyword/status filtering. Control ids define variables; formulas support arithmetic, comparisons, ternary and min/max/abs/floor/ceil/round/clamp/if; code uses {{var}}. Keep cards compact: fold secondary detail into tabs or a collapsed accordion, target roughly 450px and stay under about 800px. Never supply executable HTML or JavaScript. Minimal linked example: {"title":"Size","blocks":[{"kind":"controls","controls":[{"kind":"slider","id":"x","label":"Size","min":1,"max":10,"defaultValue":3}]},{"kind":"stats","items":[{"label":"Size","formula":"x"}]},{"kind":"svg","width":120,"height":30,"elements":[{"type":"rect","x":0,"y":0,"widthFormula":"x * 10","height":20,"fill":"primary"}]}]}. Read threadframe://examples/svg or threadframe://examples/recipes for more.',
+        'Render a fully custom interactive card with the low-level UiSpec schema. Prefer present_calculator for parameter tuning, present_decision for picking among 2-4 options, and present_diagram for node/edge flows. Prefer render_markup for custom tag layouts. Use this tool when you need raw UiSpec. Blocks: choices, controls, stats, chart, plot, svg, compare, checklist, timeline, architecture, graph, table, callout, code, text, title, caption, badge, divider, icon; bounded containers: box, grid, tabs, accordion. plot accepts discrete points, or parameterized curves in line mode: curves (label + formula), xMin/xMax, optional xVariable (default x) and samples; undefined or non-finite samples break the line into segments. graph auto-lays nodes/edges without manual coordinates, and table supports sortable columns plus keyword/status filtering. Control ids define variables; formulas support arithmetic, comparisons, ternary and min/max/abs/floor/ceil/round/clamp/if; code uses {{var}}. Keep cards compact: fold secondary detail into tabs or a collapsed accordion, target roughly 450px and stay under about 800px. Never supply executable HTML or JavaScript. Minimal linked example: {"title":"Size","blocks":[{"kind":"controls","controls":[{"kind":"slider","id":"x","label":"Size","min":1,"max":10,"defaultValue":3}]},{"kind":"stats","items":[{"label":"Size","formula":"x"}]},{"kind":"svg","width":120,"height":30,"elements":[{"type":"rect","x":0,"y":0,"widthFormula":"x * 10","height":20,"fill":"primary"}]}]}. Read threadframe://examples/svg or threadframe://examples/recipes for more.',
       inputSchema: UiSpecSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
     async ({ embedPath, ...spec }) => respond(spec, embedPath),
+  );
+
+  registerAppTool(
+    server,
+    "render_markup",
+    {
+      title: "Render ThreadFrame from Markup",
+      description: [
+        "Compose a custom interactive card from safe JSX-like tags. Use present_calculator, present_decision, or present_diagram when a shortcut fits.",
+        'Example markup: <box tint="accent" padding="md"><slider id="x" label="Amount" min={1} max={10} default={3}/><text>**Total** {x * 2}</text></box>.',
+        'Use <title>, <caption>, <badge>, <divider/>, and <icon name="arrow-down"/>; use <plot><curve/></plot>, <graph><node/><edge/></graph>, or <table><column/><row><cell/></row></table> for data.',
+        "Quote strings; put numbers, booleans, and formulas in braces. Text supports **bold**, inline code, and live {expressions} over control IDs. No JavaScript, HTML, CSS, or event attributes.",
+        "Use one question, 1–3 inputs, one main visual, and 1–3 results. Aim for ~450px in chat and keep long explanations in the reply.",
+        "Read threadframe://examples/markup for copyable recipes. Supply statePath only for local --stdio MCP Apps, or embedPath for a local HTML embed.",
+      ].join(" "),
+      inputSchema: MarkupInputSchema.extend({ embedPath: embedPathSchema }),
+      _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
+    },
+    async ({ embedPath, ...input }) => {
+      const compiled = compileMarkup(input);
+      return compiled.ok ? respond(compiled.spec, embedPath) : compileError(compiled.issues);
+    },
   );
 
   registerAppTool(
@@ -139,7 +162,7 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     {
       title: "Present Auto-Laid Diagram",
       description:
-        'Use when explaining a layered call chain, data flow, pipeline, or dependency topology. Provide nodes and directed edges only; coordinates, box sizes, and arrow paths are computed automatically. Do not hand-calculate SVG coordinates for these cases, and do not use this tool for measured charts (use render_threadframe with plot/chart). Nodes need stable ids (derived from labels when omitted); edges reference ids or labels. Optional inputs declare variables usable by node valueFormula and edge activeFormula to animate paths from sliders or toggles. Cycles are layered safely. Example: {"title":"Request path","nodes":[{"id":"client","label":"Client"},{"id":"api","label":"API","role":"Node"}],"edges":[{"from":"client","to":"api","label":"HTTP"}]}. Pass statePath only in local --stdio mode to add a Remember diagram snapshot action.',
+        'Use when explaining a layered call chain, data flow, pipeline, or dependency topology. Provide nodes and directed edges only; coordinates, box sizes, and arrow paths are computed automatically. Do not hand-calculate SVG coordinates for these cases, and do not use this tool for measured charts (use render_threadframe with plot/chart). Nodes need stable ids (derived from labels when omitted) and can use a built-in icon name; edges reference ids or labels. Optional inputs declare variables usable by node valueFormula and edge activeFormula to animate paths from sliders or toggles. Cycles are layered safely. Example: {"title":"Request path","nodes":[{"id":"client","label":"Client"},{"id":"api","label":"API","role":"Node"}],"edges":[{"from":"client","to":"api","label":"HTTP"}]}. Pass statePath only in local --stdio mode to add a Remember diagram snapshot action.',
       inputSchema: DiagramInputSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
@@ -216,6 +239,12 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
   server.registerResource("Shortcut tool recipes", "threadframe://examples/recipes", {
     mimeType: "application/json", description: "Minimal copy-paste inputs for present_calculator, present_decision, and present_diagram.",
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(RECIPES) }] }));
+
+  server.registerResource("ThreadFrame markup recipes", "threadframe://examples/markup", {
+    mimeType: "application/json", description: "Copyable render_markup inputs for a tinted flow, linked curve, node graph, and sortable table.",
+  }, async (uri) => ({
+    contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(MARKUP_RECIPES) }],
+  }));
 
   registerAppResource(
     server,

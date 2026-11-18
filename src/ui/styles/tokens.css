@@ -1,83 +1,49 @@
 :root {
-  color-scheme: light;
-  --iui-canvas: #f7f7f6;
-  --iui-base: #ffffff;
-  --iui-raised: #f1f1ef;
-  --iui-line: #dedfdb;
-  --iui-outline: #90958c;
-  --iui-groove: #d4d8d1;
-  --iui-thumb: #ffffff;
-  --iui-ink: #292a28;
-  --iui-dim: #686b65;
-  --iui-key: #343832;
-  --iui-key-fg: #ffffff;
-  --iui-blue: #526a9b;
-  --iui-plot: #56789b;
-  --iui-violet: #8d779f;
-  --iui-green: #32775e;
-  --iui-amber: #96601c;
-  --iui-shadow: 0 1px 3px #20281c0c;
-}
+  --iui-color-scheme: light dark;
+  color-scheme: var(--iui-color-scheme);
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --iui-canvas: #1b1c1c;
-    --iui-base: #242626;
-    --iui-raised: #2e3130;
-    --iui-line: #404341;
-    --iui-outline: #808c83;
-    --iui-groove: #4b554e;
-    --iui-thumb: #f0f3ed;
-    --iui-ink: #eceeea;
-    --iui-dim: #b0b6b1;
-    --iui-key: #e1e5df;
-    --iui-key-fg: #252a26;
-    --iui-blue: #9cafda;
-    --iui-plot: #8ca9c8;
-    --iui-violet: #baa4cc;
-    --iui-green: #8abca3;
-    --iui-amber: #e2b77d;
-    --iui-shadow: 0 2px 5px #00000024;
-  }
-}
-
-html[data-theme="dark"] {
-  color-scheme: dark;
-  --iui-canvas: #1b1c1c;
-  --iui-base: #242626;
-  --iui-raised: #2e3130;
-  --iui-line: #404341;
-  --iui-outline: #808c83;
-  --iui-groove: #4b554e;
-  --iui-thumb: #f0f3ed;
-  --iui-ink: #eceeea;
-  --iui-dim: #b0b6b1;
-  --iui-key: #e1e5df;
-  --iui-key-fg: #252a26;
-  --iui-blue: #9cafda;
-  --iui-plot: #8ca9c8;
-  --iui-violet: #baa4cc;
-  --iui-green: #8abca3;
-  --iui-amber: #e2b77d;
-  --iui-shadow: 0 2px 5px #00000024;
-}
-
-:root {
-  --iui-surface: var(--card, var(--color-background-secondary, var(--iui-base)));
-  --iui-surface-alt: var(--secondary, var(--color-background-tertiary, var(--iui-raised)));
-  --iui-border: var(--border, var(--color-border-primary, var(--iui-line)));
+  --iui-canvas: var(--background, var(--color-background-primary, light-dark(#f3f5f9, #151921)));
+  --iui-surface: var(--card, var(--color-background-secondary, light-dark(#fff, #202630)));
+  --iui-text: var(--foreground, var(--color-text-primary, light-dark(#1c2634, #edf1f7)));
+  --iui-muted: var(--muted-foreground, var(--color-text-secondary, light-dark(#556276, #adb9ca)));
+  --iui-primary: var(--primary, light-dark(#175ca9, #a3c9ff));
+  --iui-primary-fg: var(--primary-foreground, light-dark(#fff, #122846));
+  --iui-accent: var(--primary, var(--color-text-info, light-dark(#1659a2, #a3c9ff)));
+  --iui-focus: var(--color-ring-primary, var(--iui-accent));
+  --iui-chart-primary: var(--chart-1, light-dark(#306fc1, #83b4fa));
+  --iui-chart-secondary: var(--chart-2, light-dark(#714eae, #c4aaf2));
+  --iui-success: var(--success, var(--color-text-success, light-dark(#1d7059, #89d1b3)));
+  --iui-warn: var(--warning, var(--color-text-warning, light-dark(#955413, #edbd7d)));
+  --iui-wash: color-mix(in srgb, var(--iui-text) 5%, transparent);
+  --iui-hover: color-mix(in srgb, var(--iui-text) 9%, transparent);
+  --iui-surface-alt: var(--secondary, var(--color-background-tertiary, color-mix(in srgb, var(--iui-text) 6%, var(--iui-surface))));
+  --iui-border: var(--border, var(--color-border-secondary, color-mix(in srgb, var(--iui-text) 12%, transparent)));
   --iui-card-border: var(--card-border, var(--iui-border));
-  --iui-text: var(--foreground, var(--color-text-primary, var(--iui-ink)));
-  --iui-muted: var(--muted-foreground, var(--color-text-secondary, var(--iui-dim)));
-  --iui-primary: var(--primary, var(--iui-key));
-  --iui-primary-fg: var(--primary-foreground, var(--iui-key-fg));
-  --iui-accent: var(--primary, var(--iui-blue));
-  --iui-chart-primary: var(--chart-1, var(--iui-plot));
-  --iui-chart-secondary: var(--chart-2, var(--iui-violet));
-  --iui-control-border: var(--border, var(--iui-outline));
-  --iui-track: var(--secondary, var(--iui-groove));
-  --iui-success: var(--success, var(--iui-green));
-  --iui-warn: var(--warning, var(--iui-amber));
-  --iui-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --iui-control-border: color-mix(in srgb, var(--iui-text) 45%, transparent);
+  --iui-track: color-mix(in srgb, var(--iui-text) 26%, transparent);
+  --iui-thumb: light-dark(#fff, #f1f5fb);
+
+  --iui-caption-size: .75rem;
+  --iui-label-size: .8125rem;
+  --iui-body-size: .9375rem;
+  --iui-heading-size: 1.0625rem;
+  --iui-radius-sm: 8px;
+  --iui-radius-md: 13px;
+  --iui-radius-lg: 18px;
+  --iui-radius-card: 22px;
+  --iui-space-sm: 8px;
+  --iui-space-md: 12px;
+  --iui-space-lg: 18px;
+  --iui-ease: cubic-bezier(.2, .75, .25, 1);
+  --iui-font: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif);
+  --iui-mono: var(--font-mono, ui-monospace, "SFMono-Regular", Consolas, monospace);
+}
+
+:root[data-theme="light"] { --iui-color-scheme: light; }
+:root[data-theme="dark"] { --iui-color-scheme: dark; }
+
+@supports (color: contrast-color(white)) {
+  :root {
+    --iui-primary-fg: var(--primary-foreground, contrast-color(var(--iui-primary)));
+  }
 }

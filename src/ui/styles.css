@@ -5,3 +5,11 @@
 @import "./styles/layout.css";
 @import "./styles/vector.css";
 @import "./styles/content.css";
+@import "./styles/atoms.css";
+
+@media (pointer: coarse) {
+  .iui-action-btn, .iui-header-meta .iui-action-btn,
+  .iui-range, .iui-toggle-btn, .iui-seg-btn, .iui-tab-btn, .iui-status-pill {
+    min-height: 44px;
+  }
+}

@@ -1,177 +1,218 @@
 .iui-choices {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+  gap: var(--iui-space-sm);
 }
 
 .iui-choice-btn {
-  padding-top: 34px;
+  padding-inline-end: 38px;
 }
 
 .iui-choice-check {
   position: absolute;
-  top: 12px;
-  left: 13px;
+  top: 13px;
+  inset-inline-end: 13px;
   display: grid;
   place-items: center;
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   border: 1px solid var(--iui-control-border);
   border-radius: 50%;
   color: var(--iui-primary-fg);
 }
 
 .iui-choice-check .iui-icon {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   opacity: 0;
-  transform: scale(.5);
-  transition: opacity 160ms, transform 220ms var(--iui-ease);
 }
 
-.iui-controls-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 22px 24px;
-}
-
-.iui-range {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-  height: 5px;
-  margin: 9px 0;
-  border: 0;
-  border-radius: 5px;
-  background: linear-gradient(to right, var(--iui-primary) 0 var(--range-progress, 0%), var(--iui-track) var(--range-progress, 0%) 100%);
-  cursor: pointer;
-}
-
-.iui-range::-webkit-slider-thumb {
-  appearance: none;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  border: 1px solid var(--iui-control-border);
-  background: var(--card, var(--iui-thumb));
-  box-shadow: 0 1px 3px #0002;
-  transition: transform 150ms;
-}
-
-.iui-range::-moz-range-thumb {
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  border: 1px solid var(--iui-control-border);
-  background: var(--card, var(--iui-thumb));
-  box-shadow: 0 1px 3px #0002;
-  transition: transform 150ms;
-}
-
-.iui-range:active::-webkit-slider-thumb {
-  transform: scale(1.18);
-}
-
-.iui-range:active::-moz-range-thumb {
-  transform: scale(1.18);
-}
-
-.iui-toggle-btn {
-  display: flex;
-  align-items: center;
-  align-self: flex-start;
-  width: 36px;
-  height: 22px;
-  padding: 2px;
-  border: 1px solid var(--iui-control-border);
-  border-radius: 99px;
-  background: var(--iui-surface-alt);
-  cursor: pointer;
-}
-
-.iui-toggle-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--iui-muted);
-  box-shadow: 0 1px 3px #0002;
-  transition: transform 220ms var(--iui-ease);
-}
-
-.iui-toggle-btn.on {
+.iui-choice-btn.active .iui-choice-check {
   background: var(--iui-primary);
   border-color: var(--iui-primary);
 }
 
-.iui-toggle-btn.on .iui-toggle-thumb {
-  transform: translateX(14px);
-  background: var(--iui-primary-fg);
+.iui-choice-btn.active .iui-choice-check .iui-icon {
+  opacity: 1;
 }
 
-.iui-seg {
-  display: flex;
-  padding: 3px;
-  gap: 2px;
-  border: 1px solid var(--iui-border);
-  border-radius: 8px;
-  background: var(--iui-surface-alt);
+.iui-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(10rem, calc((100% - var(--iui-space-lg)) / 2))), 1fr));
+  gap: var(--iui-space-md) var(--iui-space-lg);
 }
 
-.iui-seg-btn {
+.iui-control {
+  display: grid;
+  align-content: start;
+  gap: 4px;
   min-width: 0;
-  flex: 1;
-  padding: 5px 7px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--iui-muted);
-  cursor: pointer;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-  transition: box-shadow 150ms;
 }
 
-.iui-seg-btn.active {
+.iui-control-top, .iui-bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: var(--iui-label-size);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.iui-control-val {
+  flex: 0 0 auto;
+  max-width: 48%;
+  text-align: end;
+  color: var(--iui-muted);
+}
+
+.iui-range {
+  --iui-range-fill: linear-gradient(to right, var(--iui-primary) var(--range-progress, 0%), var(--iui-track) var(--range-progress, 0%));
+  appearance: none;
+  width: 100%;
+  height: 34px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.iui-range::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--iui-range-fill);
+}
+
+.iui-range::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--iui-range-fill);
+}
+
+.iui-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--iui-thumb);
+  box-shadow: 0 1px 3px #0003, 0 0 0 1px #0002;
+}
+
+.iui-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--iui-thumb);
+  box-shadow: 0 1px 3px #0003, 0 0 0 1px #0002;
+}
+
+.iui-toggle-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  width: 44px;
+  min-height: 36px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.iui-toggle-btn::before {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 24px;
+  border-radius: inherit;
+  background: var(--iui-track);
+  content: "";
+  transform: translateY(-50%);
+  transition: background-color 150ms;
+}
+
+.iui-toggle-thumb {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--iui-thumb);
+  box-shadow: 0 1px 2px #0003;
+  transition: transform 180ms var(--iui-ease);
+}
+
+.iui-toggle-btn.on::before { background: var(--iui-primary); }
+.iui-toggle-btn.on .iui-toggle-thumb { transform: translateX(20px); }
+
+.iui-seg, .iui-tab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--iui-radius-md);
+  background: var(--iui-wash);
+}
+
+.iui-seg-btn, .iui-tab-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--iui-radius-sm);
+  color: var(--iui-muted);
+  background: transparent;
+  font-size: var(--iui-label-size);
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms;
+}
+
+.iui-seg-btn:hover, .iui-tab-btn:hover {
   color: var(--iui-text);
-  background: var(--iui-surface);
-  border-color: var(--iui-control-border);
-  box-shadow: var(--iui-shadow);
+  background: var(--iui-wash);
+}
+
+.iui-seg-btn.active, .iui-tab-btn[aria-selected="true"] {
+  color: var(--iui-accent);
+  background: color-mix(in srgb, var(--iui-accent) 12%, var(--iui-surface));
 }
 
 .iui-metrics-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
-  gap: 8px;
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--iui-card-border);
+  grid-template-columns: repeat(auto-fit, minmax(min(8.25rem, 100%), 1fr));
+  gap: var(--iui-space-sm);
+  margin-top: var(--iui-space-md);
 }
 
 .iui-metric-pill {
   min-width: 0;
-  padding: 12px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: var(--iui-surface-alt);
-  transition: border-color 180ms;
+  padding: 10px 14px;
+  border-radius: var(--iui-radius-md);
+  background: var(--iui-wash);
 }
 
 .iui-metric-label {
-  font-size: 10px;
   color: var(--iui-muted);
+  font-size: var(--iui-label-size);
+  font-weight: 550;
 }
 
 .iui-metric-num {
-  margin-top: 5px;
-  font-size: 23px;
-  font-weight: 600;
+  font-size: clamp(1.5rem, 1.3rem + .75vw, 1.875rem);
+  font-weight: 650;
   letter-spacing: -.04em;
-  overflow-wrap: anywhere;
+  line-height: 1.16;
 }
 
 .iui-metric-pill.warn {
-  background: color-mix(in srgb, var(--iui-warn) 8%, var(--iui-surface));
-  border-color: color-mix(in srgb, var(--iui-warn) 30%, var(--iui-border));
+  background: color-mix(in srgb, var(--iui-warn) 10%, transparent);
 }
 
 .iui-metric-num.warn, .iui-metric-warning {
@@ -181,24 +222,7 @@
 .iui-metric-warning {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 5px;
-  font-size: 10px;
-}
-
-.iui-metric-warning .iui-icon {
-  width: 12px;
-  height: 12px;
-}
-
-@media (max-width: 480px) {
-  .iui-choices {
-    grid-template-columns: 1fr;
-  }
-  .iui-choice-btn {
-    padding: 12px 12px 12px 38px;
-  }
-  .iui-choice-check {
-    top: 14px;
-  }
+  gap: 5px;
+  margin-top: 4px;
+  font-size: var(--iui-caption-size);
 }

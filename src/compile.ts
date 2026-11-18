@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { evaluateFormula, formulaIdentifiers, type VarScope } from "./runtime/formula.js";
 import type { ControlItem, LeafBlock, UiBlock, UiSpec } from "./schema/uiSpec.js";
+import { IconNameSchema } from "./schema/atoms.js";
 
 /**
  * Compilers for the high-level MCP tools. They expand compact business input into a
@@ -84,6 +85,7 @@ export const DiagramInputSchema = z.object({
     role: z.string().optional(),
     detail: z.string().optional(),
     tone: ToneSchema.optional(),
+    icon: IconNameSchema.optional(),
     valueFormula: z.string().optional(),
     unit: z.string().optional(),
   })).min(1),

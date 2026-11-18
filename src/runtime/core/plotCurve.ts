@@ -8,10 +8,12 @@ import type { UiBlock } from "../../schema/uiSpec.js";
 
 type CurvePlotBlock = Extract<UiBlock, { kind: "plot" }>;
 
-const left = 44;
+const width = 400;
+const height = 176;
+const left = 54;
 const right = 384;
-const top = 30;
-const bottom = 188;
+const top = 24;
+const bottom = 126;
 const tones = ["primary", "accent", "success", "warn"] as const;
 
 /** Function-curve view for line plots; kept out of plot.ts to respect the block line budget. */
@@ -24,7 +26,7 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
   const unit = block.unit ? ` ${block.unit}` : "";
   const format = (value: number) => formatNumber(value, block.precision);
   const wrap = el("div", "iui-plot line iui-curve-plot");
-  const canvas = svgCanvas(400, 240, block.title ?? "Function plot");
+  const canvas = svgCanvas(width, height, block.title ?? "Function plot");
   canvas.setAttribute("tabindex", "0");
   canvas.setAttribute("aria-label", `${block.title ?? "Function plot"}. Use arrow keys to inspect samples.`);
   const references = Array.from({ length: 5 }, (_, index) => {
@@ -51,7 +53,7 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
     canvas.appendChild(label);
     return label;
   });
-  if (block.xLabel) canvas.appendChild(svgText(214, 232, block.xLabel, "iui-plot-axis-label"));
+  if (block.xLabel) canvas.appendChild(svgText((left + right) / 2, 166, block.xLabel, "iui-plot-axis-label"));
   if (block.yLabel) canvas.appendChild(svgText(left, 12, block.yLabel, "iui-plot-axis-label y"));
   const readout = el("div", "iui-plot-readout", "Hover, focus, or use arrow keys to inspect samples.");
   readout.setAttribute("role", "status");
@@ -70,13 +72,15 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
       return `${curve.label} ${variable}=${format(samples[index]?.x ?? 0)} y=${value === null || value === undefined ? "undefined" : `${format(value)}${unit}`}`;
     }).join(" | ");
   };
-  const indexAt = (clientX: number) => {
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width) return 0;
-    return Math.max(0, Math.min(count - 1, Math.round((clientX - rect.left) / rect.width * (count - 1))));
+  const indexAt = (event: PointerEvent) => {
+    const matrix = canvas.getScreenCTM();
+    if (!matrix) return 0;
+    const { x } = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+    const progress = (x - left) / (right - left);
+    return Math.max(0, Math.min(count - 1, Math.round(progress * (count - 1))));
   };
   canvas.addEventListener("pointermove", (event) => {
-    focused = indexAt(event.clientX);
+    focused = indexAt(event);
     refresh();
   });
   canvas.addEventListener("pointerleave", () => { focused = -1; refresh(); });

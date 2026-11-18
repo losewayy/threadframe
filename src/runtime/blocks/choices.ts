@@ -14,6 +14,11 @@ export const renderChoices: BlockRenderer<"choices"> = (block, context) => {
     const mark = el("span", "iui-choice-check");
     mark.appendChild(icon("check"));
     btn.appendChild(mark);
+    if (opt.icon) {
+      const pictogram = icon(opt.icon);
+      pictogram.classList.add("iui-choice-icon");
+      btn.appendChild(pictogram);
+    }
     btn.appendChild(el("span", "iui-choice-label", opt.label));
     if (opt.description) {
       btn.appendChild(el("span", "iui-choice-desc", opt.description));

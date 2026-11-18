@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { IconNameSchema } from "./atoms.js";
 
 const GraphTone = z.enum(["primary", "accent", "success", "warn"]);
 
 export const GraphNodeSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
+  icon: IconNameSchema.optional(),
   group: z.string().optional(),
   role: z.string().optional(),
   detail: z.string().optional(),

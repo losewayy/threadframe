@@ -1,5 +1,6 @@
 import { el } from "../core/dom.js";
 import type { BlockRenderer } from "../core/types.js";
+import { formatNumber } from "../display.js";
 import { evaluateNumericFormula } from "../formula.js";
 
 export const renderChart: BlockRenderer<"chart"> = (block, context) => {
@@ -52,7 +53,7 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
           const val = Math.max(0, vals[idx]);
           const pct = Math.min(100, (val / Math.max(0.0001, dynamicMax)) * 100);
           s.seg.style.width = `${pct.toFixed(1)}%`;
-          s.valEl.textContent = `${val}${s.bar.unit ? ` ${s.bar.unit}` : defaultUnit}`;
+          s.valEl.textContent = `${formatNumber(val)}${s.bar.unit ? ` ${s.bar.unit}` : defaultUnit}`;
         });
       },
     });
@@ -95,7 +96,7 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
         const val = Math.max(0, vals[idx]);
         const pct = Math.min(100, (val / Math.max(0.0001, maxVal)) * 100);
         r.fill.style.width = `${pct.toFixed(1)}%`;
-        r.valEl.textContent = `${val}${r.bar.unit ? ` ${r.bar.unit}` : defaultUnit}`;
+        r.valEl.textContent = `${formatNumber(val)}${r.bar.unit ? ` ${r.bar.unit}` : defaultUnit}`;
       });
     },
   });

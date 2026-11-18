@@ -5,6 +5,7 @@ import type { RenderReport } from "../runtime/core/types.js";
 import { PRESETS } from "../presets.js";
 import { ThreadFrameRenderer } from "../runtime/renderer.js";
 import type { UiSpec } from "../schema/uiSpec.js";
+import { parsePartialMarkup } from "../schema/markup.js";
 import { VERSION } from "../version.js";
 import "./styles.css";
 
@@ -23,7 +24,7 @@ if (!root) {
 function resolveSpecPayload(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") return raw;
   const record = raw as Record<string, unknown>;
-  if (typeof record.preset === "string" && record.preset in PRESETS) {
+  if (typeof record.preset === "string" && Object.hasOwn(PRESETS, record.preset)) {
     return PRESETS[record.preset];
   }
   return raw;
@@ -116,22 +117,41 @@ if (currentStandaloneSpec) {
   );
 }
 
-// Register MCP Apps lifecycle handlers BEFORE connect() so initial notifications are never missed
-app.ontoolinputpartial = (params) => {
+let previewingMarkup = false;
+function renderToolInput(raw: Record<string, unknown> | undefined, streaming: boolean): void {
   clearReplayTimers();
-  renderer.renderPartial(resolveSpecPayload(params.arguments), true);
-};
+  const markup = raw?.markup;
+  previewingMarkup = typeof markup === "string";
+  if (typeof markup === "string") {
+    // Only the server's tool result may add actions or confirm a complete card.
+    const preview = parsePartialMarkup({
+      markup,
+      title: typeof raw?.title === "string" ? raw.title : undefined,
+      subtitle: typeof raw?.subtitle === "string" ? raw.subtitle : undefined,
+      badge: typeof raw?.badge === "string" ? raw.badge : undefined,
+    });
+    renderer.renderPartial(preview, true, preview.pendingBlockCount);
+  } else {
+    renderer.renderPartial(resolveSpecPayload(raw), streaming);
+  }
+}
 
-app.ontoolinput = (params) => {
-  clearReplayTimers();
-  renderer.renderPartial(resolveSpecPayload(params.arguments), false);
-};
+// Register handlers before connect() so initial notifications are never missed.
+app.ontoolinputpartial = (params) => renderToolInput(params.arguments, true);
+app.ontoolinput = (params) => renderToolInput(params.arguments, false);
 
 app.ontoolresult = (result) => {
   clearReplayTimers();
   if (result.structuredContent) {
     renderer.renderPartial(resolveSpecPayload(result.structuredContent), false);
+  } else if (previewingMarkup && result.isError) {
+    const issue = result.content?.find((part) => part.type === "text");
+    renderer.renderFull({
+      title: "Card could not be built",
+      blocks: [{ kind: "callout", tone: "warn", body: issue?.text ?? "Check the markup and try again." }],
+    });
   }
+  previewingMarkup = false;
 };
 
 app.onhostcontextchanged = (ctx) => syncHostStyles(ctx);

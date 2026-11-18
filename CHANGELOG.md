@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-19
+
+### Added
+
+- `render_markup` compiles concise tags, live text formulas, and bounded layouts to UiSpec. Closed components can appear while the host streams arguments.
+- `box`, `text`, `title`, `caption`, `badge`, `divider`, and `icon` blocks, with semantic tints and a shared icon set for diagrams and choices.
+- Tinted flow, linked curve, and sortable table examples at `threadframe://examples/markup`.
+
+### Changed
+
+- Light, dark, and embedded cards use softer surfaces, clearer type hierarchy, and more compact controls. Tables wrap text, and large graph canvases scroll within their own region.
+
+### Fixed
+
+- Chart labels use the same rounded number display in the card and its Markdown fallback.
+
 ## [0.4.0] - 2026-11-19
 
 ### Added

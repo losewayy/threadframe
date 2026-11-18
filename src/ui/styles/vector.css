@@ -14,78 +14,68 @@
 }
 
 .iui-vector-caption {
-  margin-top: 10px;
+  margin: 8px 0 0;
   color: var(--iui-muted);
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: var(--iui-label-size);
+  line-height: 1.5;
+}
+
+.iui-plot .iui-vector-canvas {
+  width: min(100%, 26rem);
+  margin-inline: auto;
+}
+
+.iui-curve-plot .iui-vector-canvas {
+  width: min(100%, 22.5rem);
 }
 
 .iui-plot text {
   fill: var(--iui-muted);
-  font-size: 12px;
+  font-size: 14px;
 }
 
+.iui-plot .iui-plot-axis-label {
+  font-size: 14px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.iui-plot-axis-label.y { text-anchor: start; }
+
 .iui-plot-reference {
-  stroke: var(--iui-border);
+  stroke: color-mix(in srgb, var(--iui-muted) 24%, transparent);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
-.iui-plot-y-tick {
-  text-anchor: end;
+.iui-plot-reference:first-of-type {
+  stroke: color-mix(in srgb, var(--iui-muted) 43%, transparent);
 }
 
-.iui-plot-axis-label {
-  text-anchor: middle;
-}
-
-.iui-plot-axis-label.y {
-  text-anchor: start;
-}
+.iui-plot-y-tick { text-anchor: end; }
 
 .iui-plot-area {
   fill: var(--iui-chart-primary);
-  fill-opacity: 0.1;
+  fill-opacity: .085;
 }
 
-.iui-plot-line {
+.iui-plot-line, .iui-plot-curve {
   fill: none;
   stroke: var(--iui-chart-primary);
-  stroke-width: 2;
+  stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 
-.iui-plot-curve {
-  fill: none;
-  stroke: var(--iui-chart-primary);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.iui-plot-curve.accent {
-  stroke: var(--iui-chart-secondary);
-}
-
-.iui-plot-curve.success {
-  stroke: var(--iui-success);
-}
-
-.iui-plot-curve.warn {
-  stroke: var(--iui-warn);
-}
-
-.iui-plot-curve.dashed {
-  stroke-dasharray: 6 5;
-}
+.iui-plot-curve.accent { stroke: var(--iui-chart-secondary); }
+.iui-plot-curve.success { stroke: var(--iui-success); }
+.iui-plot-curve.warn { stroke: var(--iui-warn); }
+.iui-plot-curve.dashed { stroke-dasharray: 5 5; }
 
 .iui-curve-plot svg:focus-visible {
-  outline: 2px solid var(--iui-accent);
-  outline-offset: 3px;
-  border-radius: 6px;
+  outline-offset: 2px;
+  border-radius: var(--iui-radius-sm);
 }
 
 .iui-plot-dot {
@@ -94,47 +84,56 @@
   vector-effect: non-scaling-stroke;
 }
 
-.iui-donut-track,
-.iui-donut-segment {
+.iui-plot.donut {
+  display: grid;
+  align-items: center;
+  gap: 8px var(--iui-space-lg);
+}
+
+.iui-plot.donut .iui-vector-canvas { width: min(100%, 19rem); }
+
+@container (width >= 28rem) {
+  .iui-plot.donut {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+
+  .iui-plot.donut .iui-plot-readout { grid-column: 1 / -1; }
+}
+
+.iui-donut-track, .iui-donut-segment {
   fill: none;
   stroke-width: 22;
 }
 
-.iui-donut-track {
-  stroke: var(--iui-border);
-}
+.iui-donut-track { stroke: var(--iui-wash); }
 
 .iui-plot .iui-donut-total {
   fill: var(--iui-text);
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 27px;
+  font-weight: 650;
   text-anchor: middle;
   dominant-baseline: middle;
 }
 
-.iui-donut-label {
-  text-anchor: middle;
-}
+.iui-donut-label { text-anchor: middle; }
 
 .iui-plot-readout {
-  min-height: 18px;
-  margin-top: 10px;
+  margin-top: 4px;
   color: var(--iui-muted);
-  font-size: 11px;
+  font-size: var(--iui-caption-size);
+  text-align: center;
 }
 
-.iui-plot-dot, .iui-plot-bar, .iui-donut-segment {
-  cursor: crosshair;
-}
+.iui-plot-dot, .iui-plot-bar, .iui-donut-segment { cursor: crosshair; }
 
 .iui-plot-dot:hover, .iui-plot-dot:focus,
-.iui-plot-bar:hover, .iui-plot-bar:focus,
-.iui-donut-segment:hover, .iui-donut-segment:focus {
+.iui-plot-bar:hover, .iui-plot-bar:focus {
   outline: none;
   stroke: var(--iui-text);
-  stroke-width: 3;
+  stroke-width: 2;
 }
 
 .iui-donut-segment:hover, .iui-donut-segment:focus {
-  stroke-width: 26;
+  outline: none;
+  stroke-width: 27;
 }

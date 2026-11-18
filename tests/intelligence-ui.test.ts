@@ -7,7 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import type { ClientCapabilities, JSONRPCRequest } from "@modelcontextprotocol/server";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { createServer } from "../server.js";
+import { createServer, UI_RESOURCE_URI } from "../server.js";
 import { detectClientAdapter } from "../src/clientAdapter.js";
 import { injectStandaloneHtml } from "../src/export.js";
 import { SVG_EXAMPLES } from "../src/examples.js";
@@ -486,7 +486,9 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
     { name: "present_calculator", arguments: { title: "Shortcut calculator", inputs: [{ kind: "slider", label: "A", min: 0, max: 10 }], metrics: [{ label: "Double", formula: "a * 2" }] } },
     { name: "present_decision", arguments: { title: "Shortcut decision", options: [{ label: "One" }, { label: "Two" }] } },
     { name: "present_diagram", arguments: { title: "Shortcut diagram", nodes: [{ id: "a", label: "A" }, { id: "b", label: "B" }], edges: [{ from: "a", to: "b" }] } },
+    { name: "render_markup", arguments: { title: "Markup scale", markup: '<slider id="gain" label="Gain" min={1} max={8} default={2}/><text>Total {gain * 2}</text>' } },
   ];
+  const markup = shortcuts[3];
   try {
     for (const scenario of [
       { name: "Native", capabilities: appsCapabilities, local: true, written: false },
@@ -502,18 +504,26 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.deepEqual(result.structuredContent, spec);
           assert.equal(result.content[0].text, renderFallbackMarkdown(spec));
           const listing = await client.request("tools/list", {});
-          const tools = z.array(z.object({ name: z.string(), inputSchema: z.record(z.string(), z.unknown()) })).parse(listing.tools);
-          for (const name of ["render_threadframe", "present_calculator", "present_decision", "present_diagram", "save_threadframe_state", "read_threadframe_state"]) {
+          const tools = z.array(z.object({
+            name: z.string(), inputSchema: z.record(z.string(), z.unknown()),
+            _meta: z.object({ ui: z.object({ resourceUri: z.string() }).optional() }).optional(),
+          })).parse(listing.tools);
+          for (const name of ["render_threadframe", ...shortcuts.map((entry) => entry.name), "save_threadframe_state", "read_threadframe_state"]) {
             assert.ok(tools.some((tool) => tool.name === name), `${name} should be registered`);
           }
           for (const tool of tools) assert.ok(!JSON.stringify(tool.inputSchema).includes('"$ref"'), `${tool.name} schema has $ref`);
-          for (const name of ["present_calculator", "present_decision", "present_diagram"]) {
+          for (const { name } of shortcuts) {
             const shortcutTool = tools.find((tool) => tool.name === name)!;
             assert.ok(JSON.stringify(shortcutTool.inputSchema).includes('"embedPath"'), `${name} should accept embedPath`);
           }
           const schema = JSON.stringify(tools.find((tool) => tool.name === "render_threadframe")!.inputSchema);
-          for (const kind of ["controls", "stats", "svg", "timeline", "grid", "graph", "table"]) assert.ok(schema.includes(`"const":"${kind}"`));
+          for (const kind of ["controls", "stats", "svg", "timeline", "grid", "graph", "table", "box", "text", "icon"]) assert.ok(schema.includes(`"const":"${kind}"`));
           assert.ok(!schema.includes('"$ref"'));
+          assert.equal(tools.find((tool) => tool.name === markup.name)?._meta?.ui?.resourceUri, UI_RESOURCE_URI);
+          const uiResource = await client.request("resources/read", { uri: UI_RESOURCE_URI });
+          const bundle = z.array(z.object({ uri: z.string(), mimeType: z.string(), text: z.string() })).parse(uiResource.contents)[0];
+          assert.equal(bundle.mimeType, RESOURCE_MIME_TYPE);
+          assert.ok(bundle.text.includes('<main id="app-root"></main>'));
           const examples = await client.request("resources/read", { uri: "threadframe://examples/svg" });
           const resources = z.array(z.object({ text: z.string() })).parse(examples.contents);
           for (const example of Object.values(JSON.parse(resources[0].text))) UiSpecSchema.parse(example);
@@ -523,6 +533,36 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.ok(shortcut.structuredContent);
           const diagram = resultSchema.parse(await client.request("tools/call", { name: "present_diagram", arguments: recipes.diagram }));
           assert.ok(diagram.structuredContent?.blocks.some((block) => block.kind === "graph"));
+          const markupRecipe = await client.request("resources/read", { uri: "threadframe://examples/markup" });
+          const markupRecipes = JSON.parse(z.array(z.object({ text: z.string() })).parse(markupRecipe.contents)[0].text);
+          const nativeFlow = resultSchema.parse(await client.request("tools/call", { name: markup.name, arguments: markupRecipes.flow }));
+          assert.equal(nativeFlow.structuredContent?.blocks[0].kind, "box");
+          const markupStatePath = path.join(directory, "markup state.json");
+          const nativeMarkup = resultSchema.parse(await client.request("tools/call", {
+            name: markup.name, arguments: { ...markup.arguments, embedPath, statePath: markupStatePath },
+          }));
+          const card = nativeMarkup.structuredContent;
+          const saveAction = card?.actions?.find((action) => action.kind === "save_state");
+          assert.ok(card && saveAction);
+          assert.equal(saveAction.statePath, markupStatePath);
+          assert.match(nativeMarkup.content[0].text, /Total 4/);
+          await assert.rejects(fs.access(markupStatePath));
+          const store = new UiStateStore({
+            saveState: async (snapshot, statePath) => {
+              const saved = resultSchema.parse(await client.request("tools/call", {
+                name: "save_threadframe_state", arguments: { snapshot, statePath },
+              }));
+              assert.equal(saved.isError, undefined);
+            },
+          });
+          store.specTitle = card.title;
+          store.initDefaults(card.blocks);
+          store.scope.gain = 5;
+          await store.dispatchAction(saveAction);
+          const read = resultSchema.parse(await client.request("tools/call", {
+            name: "read_threadframe_state", arguments: { statePath: markupStatePath },
+          }));
+          assert.deepEqual(JSON.parse(read.content[0].text).variables, [{ id: "gain", label: "Gain", value: 5, changed: true }]);
           const nativeStatePath = path.join(directory, "native-state.json");
           const withState = resultSchema.parse(await client.request("tools/call", {
             name: "present_calculator", arguments: { ...shortcuts[0].arguments, statePath: nativeStatePath },
@@ -564,6 +604,11 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           }));
           assert.equal(httpState.isError, true);
           assert.match(httpState.content[0].text, /MCP Apps clients over local --stdio/);
+          const denied = resultSchema.parse(await client.request("tools/call", { name: markup.name, arguments: { ...markup.arguments, embedPath } }));
+          assert.equal(denied.isError, true);
+          assert.match(denied.content[0].text, /local --stdio/);
+          const textOnly = resultSchema.parse(await client.request("tools/call", markup));
+          assert.match(textOnly.content[0].text, /Total 4/);
         }
         if (scenario.name === "Antigravity") {
           for (const shortcut of shortcuts) {
@@ -580,6 +625,13 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           }));
           assert.equal(stateRejected.isError, true);
           assert.match(stateRejected.content[0].text, /MCP Apps clients over local --stdio/);
+          const rejectedFile = path.join(directory, "markup-rejected.html");
+          const markupRejected = resultSchema.parse(await client.request("tools/call", {
+            name: markup.name, arguments: { ...markup.arguments, embedPath: rejectedFile, statePath: path.join(directory, "state.json") },
+          }));
+          assert.equal(markupRejected.isError, true);
+          assert.match(markupRejected.content[0].text, /MCP Apps clients over local --stdio/);
+          await assert.rejects(fs.access(rejectedFile));
           const directSave = resultSchema.parse(await client.request("tools/call", {
             name: "save_threadframe_state",
             arguments: {

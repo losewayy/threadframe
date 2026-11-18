@@ -28,9 +28,11 @@ export class ThreadFrameRenderer {
     });
   }
 
-  renderPartial(raw: unknown, streaming: boolean): void {
+  renderPartial(raw: unknown, streaming: boolean, pendingBlockCount?: number): void {
     try {
-      this.renderParsed(parsePartialUiSpec(raw), streaming);
+      const parsed = parsePartialUiSpec(raw);
+      if (pendingBlockCount !== undefined) parsed.pendingBlockCount = pendingBlockCount;
+      this.renderParsed(parsed, streaming);
     } catch (error) {
       this.bridge.onRender?.({ status: "error", blockCount: this.blockViews.length, pendingBlockCount: 0, message: (error as Error).message });
       throw error;
@@ -83,7 +85,7 @@ export class ThreadFrameRenderer {
   private renderNestedBlock(block: UiBlock, context: BlockRenderContext, className = "iui-subblock"): HTMLElement {
     const node = el("section", className);
     node.dataset.kind = block.kind;
-    if (block.title) node.appendChild(el("h3", "iui-block-title", block.title));
+    if ("title" in block && block.title) node.appendChild(el("h3", "iui-block-title", block.title));
     node.appendChild(renderBlock(block.kind, block, context));
     return node;
   }
@@ -98,11 +100,14 @@ export class ThreadFrameRenderer {
     if (parsed.subtitle) titleWrap.appendChild(el("p", "iui-subtitle", parsed.subtitle));
     header.appendChild(titleWrap);
     const meta = el("div", "iui-header-meta");
-    const badge = el("span", "iui-badge");
-    badge.setAttribute("role", "status");
-    badge.appendChild(el("span", streaming ? "iui-dot streaming" : "iui-dot"));
-    badge.appendChild(document.createTextNode(streaming ? "Streaming UI..." : parsed.badge ?? "Interactive"));
-    meta.appendChild(badge);
+    const badgeText = streaming ? "Streaming UI…" : parsed.badge;
+    if (badgeText) {
+      const badge = el("span", "iui-badge");
+      badge.setAttribute("role", "status");
+      badge.appendChild(el("span", streaming ? "iui-dot streaming" : "iui-dot"));
+      badge.appendChild(document.createTextNode(badgeText));
+      meta.appendChild(badge);
+    }
     if (this.bridge.onReplayRequested && !streaming) {
       const replay = el("button", "iui-action-btn secondary", "Replay Build");
       replay.prepend(icon("replay"));
@@ -110,7 +115,7 @@ export class ThreadFrameRenderer {
       replay.addEventListener("click", () => this.bridge.onReplayRequested?.());
       meta.appendChild(replay);
     }
-    header.appendChild(meta);
+    if (meta.childElementCount) header.appendChild(meta);
     if (this.headerEl) this.headerEl.replaceWith(header);
     else shell.prepend(header);
     this.headerEl = header;

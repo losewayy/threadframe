@@ -33,6 +33,11 @@ export const renderArchitecture: BlockRenderer<"architecture"> = (block, context
     for (const node of layer.nodes) {
       const btn = el("button", "iui-arch-node");
       btn.type = "button";
+      if (node.icon) {
+        const pictogram = icon(node.icon);
+        pictogram.classList.add("iui-arch-icon");
+        btn.appendChild(pictogram);
+      }
       btn.appendChild(el("span", "iui-choice-label", node.label));
       btn.appendChild(
         el("span", "iui-choice-desc", node.badge ? `${node.role} · ${node.badge}` : node.role),

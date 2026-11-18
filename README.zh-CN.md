@@ -6,7 +6,7 @@
 
 [English](README.md)
 
-**ThreadFrame** 是一个开源的流式对话界面运行时和 MCP Apps（`ui://`，SEP-1865）服务端，用于在 AI 对话气泡里直接渲染可交互的小卡片。模型只返回简洁的声明式 JSON，运行时负责边流式到达边渲染积木、在本地无 `eval` 安全计算公式、绘制响应式矢量图形，并按连接的宿主客户端自动适配。
+**ThreadFrame** 是一个开源的流式对话界面运行时和 MCP Apps（`ui://`，SEP-1865）服务端，用于在 AI 对话气泡里渲染可交互的小卡片。模型可以用短标签或声明式 JSON 描述卡片，运行时随输入渲染已经写完的积木，在本地计算公式，并按客户端能力选择展现方式。
 
 ![ThreadFrame 交互式上线向导演示](docs/demo.gif)
 
@@ -64,9 +64,25 @@ cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 - **HTML 内嵌型客户端**（如 Antigravity，或在非 UI 宿主下设置环境变量 `THREADFRAME_HOST=antigravity`）：在本地 `--stdio` 模式下可选传入 `embedPath`，直接将透明紧凑的 `--embed` 单文件写到指定产物目录，不浪费模型上下文。
 - **纯终端 / 文本客户端**：自动输出结构清楚的 Markdown 表格、清单和实时算好的代码块。
 
-## 积木目录（17 种）
+## 用 `render_markup` 拼卡片
 
-包含 **14 种叶子积木** 和 **3 种布局容器**：
+试算、决策和节点图优先用对应的快捷工具。需要自由排版时，调用 `render_markup`，传入 `markup` 字符串。可选的 `title`、`subtitle`、`badge` 也可以写在最外层的 `<frame>` 上。
+
+```jsx
+<frame title="传输容量">
+  <slider id="workers" label="工作进程" min={1} max={8} default={3}/>
+  <box tint="accent" padding="md">
+    <title>预计吞吐量</title>
+    <text>满负载时每秒处理 **{workers * 4} 个任务**</text>
+  </box>
+</frame>
+```
+
+- 字符串加引号，数字、布尔值和公式放进花括号。`text`、`title`、`caption`、`badge` 中的 `{表达式}` 随控件值更新，支持加粗和行内代码。要显示字面量 `<` 或 `{`，写 `&lt;` 或 `&#123;`。
+- 用 `<plot><curve/></plot>`、`<graph><node/><edge/></graph>` 或 `<table><column/><row><cell/></row></table>` 展示数据。顶层可以用 `<button label="复制摘要" action="copy_state"/>`。选项可通过 `<choice><set var="workers" value={4}/></choice>` 给已声明的控件赋值。
+- 一张卡围绕一个问题，放 1–3 个输入、一个主视觉、1–3 个结果，高度尽量控制在约 450px。详细解释放在对话正文。完整入参示例可读取 `threadframe://examples/markup`。
+
+## 积木目录
 
 | 类别 | 积木 | 用途 |
 | --- | --- | --- |
@@ -75,11 +91,12 @@ cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 | 对比与流程 | `compare`、`checklist`、`timeline`、`architecture` | 方案对比矩阵、带进度清单、可选步骤时间线、分层架构点击视图。 |
 | 拓扑与数据 | `graph`、`table` | 自动分层排版的节点连线图（无需手写坐标），以及可排序、关键词/状态筛选的工程数据表。 |
 | 提示与代码 | `callout`、`code` | 语义提示条，以及支持 `{{var}}` 变量实时替换与一键复制的代码/命令预览卡。 |
+| 轻量排版 | `box`、`text`、`title`、`caption`、`badge`、`divider`、`icon` | 横纵排列、柔色底、实时文字和内置 SVG 图标。 |
 | 布局容器 | `grid`、`tabs`、`accordion` | 响应式分栏网格、标签页与折叠抽屉，隐藏面板中的控件和图表同样保持实时联动。 |
 
-容器采用有界扁平组合：`grid` 内放置叶子积木，`tabs` 和 `accordion` 每项可放叶子积木或一层 `grid`，Schema 不含递归 `$ref`。
+顶层 `box` 或 `grid` 可以放普通积木或一层浅 `box`。浅 `box` 只装文字、标题、说明、徽章、分割线和图标。`tabs` 和 `accordion` 每项可以放普通积木、浅 `box` 或 `grid`。工具 Schema 没有 `$ref`。
 
-三个快捷工具 `present_calculator`、`present_decision`、`present_diagram` 接收扁平业务入参，由纯函数编译器展开成标准 UiSpec，后续的校验、渲染、`--embed` 导出和 Markdown 降级完全复用同一条链路。
+三个快捷工具 `present_calculator`、`present_decision`、`present_diagram` 与 `render_markup` 都编译成标准 UiSpec，共用渲染、`--embed` 导出和 Markdown 降级。
 
 7 个内置展示预设（`inspect_preset_frame`）：`gpu-vram-tuner`、`runtime-compare`、`deploy-checklist`、`mcp-architecture`、`composable-workbench`、`svg-visual-lab`、`agent-launch-kit`。
 

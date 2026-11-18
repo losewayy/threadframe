@@ -7,7 +7,7 @@ import type {
 } from "./types.js";
 
 export class UiStateStore implements UiState {
-  readonly scope: VarScope = {};
+  readonly scope: VarScope = Object.create(null);
   readonly checklistState = new Map<string, boolean>();
   readonly selectedChoiceIds = new Set<string>();
   readonly tabSelections = new Map<string, string>();

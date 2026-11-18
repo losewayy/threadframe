@@ -26,12 +26,12 @@ export interface GraphLayout {
 }
 
 const PADDING = 16;
-const LAYER_GAP = 64;
+const LAYER_GAP = 48;
 const NODE_GAP = 22;
 const EDGE_INSET = 8;
 
 function charWidth(char: string): number {
-  return /[⺀-￿]/.test(char) ? 12 : 6.8;
+  return /[\u2E80-\uFFFF]|[^\u0000-\uFFFF]/u.test(char) ? 14 : 8;
 }
 
 function textWidth(text: string | undefined): number {
@@ -42,8 +42,22 @@ function textWidth(text: string | undefined): number {
 }
 
 function measureNode(node: GraphNode): { width: number; height: number } {
-  const width = Math.max(96, Math.min(220, Math.max(textWidth(node.label) + 28, textWidth(node.role) + 28)));
-  return { width, height: node.role || node.group ? 64 : 46 };
+  const subtitle = [node.group, node.role].filter(Boolean).join(" · ");
+  const labelWidth = textWidth(node.label) + (node.icon ? 22 : 0);
+  const width = Math.max(106, Math.min(264, Math.max(labelWidth, textWidth(subtitle)) + 26));
+  return { width, height: subtitle && node.valueFormula ? 76 : subtitle || node.valueFormula ? 60 : 46 };
+}
+
+export function fitGraphLabel(text: string, width: number): string {
+  if (textWidth(text) <= width) return text;
+  let prefix = "";
+  let remaining = width - charWidth("…");
+  for (const char of text) {
+    remaining -= charWidth(char);
+    if (remaining < 0) break;
+    prefix += char;
+  }
+  return `${prefix}…`;
 }
 
 function edgeKey(edge: GraphEdge): string {

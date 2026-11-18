@@ -1,6 +1,65 @@
 import type { CalculatorInput, DecisionInput, DiagramInput } from "./compile.js";
 import type { UiSpec } from "./schema/uiSpec.js";
 
+export const MARKUP_RECIPES = {
+  guide: "One question, 1–3 inputs, one main visual, and 1–3 results. Aim for about 450px in chat. Keep detailed explanation in the surrounding reply.",
+  flow: {
+    title: "From request to response",
+    subtitle: "How a local request reaches the model.",
+    markup: `<box align="center" gap="sm">
+  <box tint="primary" align="center" radius="lg" padding="sm" gap="none">
+    <icon name="terminal" tint="primary"/>
+    <title>Client</title>
+    <caption>Sends the request</caption>
+  </box>
+  <icon name="arrow-down" label="Then"/>
+  <box tint="accent" align="center" radius="lg" padding="sm" gap="none">
+    <icon name="server" tint="accent"/>
+    <title>Runtime</title>
+    <caption>Queues and batches the input</caption>
+  </box>
+  <icon name="arrow-down" label="Then"/>
+  <box tint="success" align="center" radius="lg" padding="sm" gap="none">
+    <icon name="cpu" tint="success"/>
+    <title>Model</title>
+    <caption>Generates the response</caption>
+  </box>
+</box>`,
+  },
+  curve: {
+    title: "How steep is this line?",
+    subtitle: "Change the slope or intercept to see the result at x = 2.",
+    markup: `<slider id="a" label="Slope" min={-5} max={5} step={0.5} default={2}/>
+<slider id="b" label="Intercept" min={-4} max={4} step={0.5} default={1}/>
+<plot mode="line" xMin={-4} xMax={4} xLabel="x" yLabel="f(x)">
+  <curve label="f(x)" formula={a * x + b}/>
+</plot>
+<stats>
+  <stat label="f(2)" formula={2 * a + b} tone="primary"/>
+</stats>`,
+  },
+  diagram: {
+    title: "Where does a request go?",
+    markup: `<graph>
+  <node id="client" label="Client" icon="terminal" detail="Sends the request"/>
+  <node id="runtime" label="Runtime" icon="server" detail="Queues and batches the input"/>
+  <node id="model" label="Model" icon="cpu" detail="Generates the response"/>
+  <edge from="client" to="runtime"/>
+  <edge from="runtime" to="model"/>
+</graph>`,
+  },
+  table: {
+    title: "Compare worker capacity",
+    markup: `<slider id="batch" label="Batch size" min={1} max={8} default={2}/>
+<table>
+  <column key="worker" label="Worker"/>
+  <column key="slots" label="Batch capacity" align="end" formula={slots * batch}/>
+  <row><cell column="worker" value="Worker A"/><cell column="slots" value={3}/></row>
+  <row><cell column="worker" value="Worker B"/><cell column="slots" value={5}/></row>
+</table>`,
+  },
+};
+
 export const SVG_EXAMPLES: Record<string, UiSpec> = {
   capacity: {
     title: "Capacity allocation", subtitle: "Illustrative units, not measured memory usage.",

@@ -9,6 +9,7 @@ import { GraphBlockSchema, GraphEdgeSchema, GraphNodeSchema } from "./graph.js";
 export { GraphBlockSchema } from "./graph.js";
 import { TableBlockSchema, TableColumnSchema, TableRowSchema } from "./table.js";
 export { TableBlockSchema } from "./table.js";
+import { AtomicLeafBlockSchema, BoxFields, IconNameSchema } from "./atoms.js";
 
 /**
  * Declarative UI specification schema for ThreadFrame.
@@ -66,6 +67,7 @@ export const ControlsBlockSchema = z.object({
 export const ChoiceOptionSchema = z.object({
   id: z.string(),
   label: z.string(),
+  icon: IconNameSchema.optional(),
   description: z.string().optional(),
   prompt: z.string().optional(),
   setVars: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
@@ -130,6 +132,7 @@ export const ChecklistBlockSchema = z.object({
 export const ArchitectureNodeSchema = z.object({
   id: z.string(),
   label: z.string(),
+  icon: IconNameSchema.optional(),
   role: z.string(),
   detail: z.string().optional(),
   badge: z.string().optional(),
@@ -171,49 +174,64 @@ export const LeafBlockSchema = z.discriminatedUnion("kind", [
   CodeBlockSchema,
   GraphBlockSchema,
   TableBlockSchema,
+  ...AtomicLeafBlockSchema.options,
 ]);
 
 // Containers are expanded explicitly so tool JSON Schemas never need recursive refs.
+export const InnerBoxBlockSchema = z.strictObject({
+  ...BoxFields,
+  children: z.array(AtomicLeafBlockSchema).min(1),
+});
+const LayoutLeafSchema = z.discriminatedUnion("kind", [
+  ...LeafBlockSchema.options, InnerBoxBlockSchema,
+]);
+export const BoxBlockSchema = z.strictObject({
+  ...BoxFields,
+  children: z.array(LayoutLeafSchema).min(1),
+});
+
 export const InnerGridBlockSchema = z.object({
   kind: z.literal("grid"),
   id: z.string().optional(),
   title: z.string().optional(),
   columns: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
-  children: z.array(LeafBlockSchema).min(1),
+  children: z.array(LayoutLeafSchema).min(1),
 });
 export const GridBlockSchema = InnerGridBlockSchema;
 const ContainerChildSchema = z.discriminatedUnion("kind", [
-  ...LeafBlockSchema.options, InnerGridBlockSchema,
+  ...LayoutLeafSchema.options, InnerGridBlockSchema,
 ]);
 
+export const TabItemSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  badge: z.string().optional(),
+  children: z.array(ContainerChildSchema).min(1),
+});
 export const TabsBlockSchema = z.object({
   kind: z.literal("tabs"),
   id: z.string().optional(),
   title: z.string().optional(),
   defaultTab: z.string().optional(),
-  tabs: z.array(z.object({
-    id: z.string(),
-    label: z.string(),
-    badge: z.string().optional(),
-    children: z.array(ContainerChildSchema).min(1),
-  })).min(1),
+  tabs: z.array(TabItemSchema).min(1),
 });
 
+export const AccordionItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  summary: z.string().optional(),
+  defaultOpen: z.boolean().optional(),
+  children: z.array(ContainerChildSchema).min(1),
+});
 export const AccordionBlockSchema = z.object({
   kind: z.literal("accordion"),
   id: z.string().optional(),
   title: z.string().optional(),
-  items: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    summary: z.string().optional(),
-    defaultOpen: z.boolean().optional(),
-    children: z.array(ContainerChildSchema).min(1),
-  })).min(1),
+  items: z.array(AccordionItemSchema).min(1),
 });
 
 export const UiBlockSchema = z.discriminatedUnion("kind", [
-  ...LeafBlockSchema.options, GridBlockSchema, TabsBlockSchema, AccordionBlockSchema,
+  ...LeafBlockSchema.options, BoxBlockSchema, GridBlockSchema, TabsBlockSchema, AccordionBlockSchema,
 ]);
 
 export const UiActionSchema = z.object({
@@ -239,7 +257,7 @@ export type ControlItem = z.infer<typeof ControlItemSchema>;
 export function walkBlocks(blocks: readonly UiBlock[], visitor: (block: UiBlock) => void): void {
   for (const block of blocks) {
     visitor(block);
-    if (block.kind === "grid") walkBlocks(block.children, visitor);
+    if (block.kind === "grid" || block.kind === "box") walkBlocks(block.children, visitor);
     else if (block.kind === "tabs") {
       for (const tab of block.tabs) walkBlocks(tab.children, visitor);
     } else if (block.kind === "accordion") {
@@ -297,7 +315,7 @@ export interface PartialUiSpecResult {
 }
 
 function partialBlockChildren(raw: unknown, depth = 0): { value: unknown; pending: boolean } {
-  if (!raw || typeof raw !== "object" || depth > 2) return { value: raw, pending: false };
+  if (!raw || typeof raw !== "object" || depth > 3) return { value: raw, pending: false };
   const block = raw as Record<string, unknown>;
   const lists: Record<string, Array<[string, z.ZodType]>> = {
     plot: [["points", PlotPointSchema], ["curves", CurveSeriesSchema]],
@@ -307,7 +325,7 @@ function partialBlockChildren(raw: unknown, depth = 0): { value: unknown; pendin
     graph: [["nodes", GraphNodeSchema], ["edges", GraphEdgeSchema]],
     table: [["columns", TableColumnSchema], ["rows", TableRowSchema]],
   };
-  const schemas = typeof block.kind === "string" ? lists[block.kind] : undefined;
+  const schemas = typeof block.kind === "string" && Object.hasOwn(lists, block.kind) ? lists[block.kind] : undefined;
   if (schemas) {
     const value = { ...block };
     let pending = false;
@@ -321,17 +339,29 @@ function partialBlockChildren(raw: unknown, depth = 0): { value: unknown; pendin
     return { value, pending };
   }
   let pending = false;
-  const children = (items: unknown) => Array.isArray(items) ? items.map((item) => {
+  const children = (items: unknown, schema: z.ZodType) => Array.isArray(items) ? items.flatMap((item) => {
     const parsed = partialBlockChildren(item, depth + 1);
+    if (!schema.safeParse(parsed.value).success) {
+      pending = true;
+      return [];
+    }
     pending ||= parsed.pending;
-    return parsed.value;
+    return [parsed.value];
   }) : items;
   let value: unknown = raw;
-  if (block.kind === "grid") value = { ...block, children: children(block.children) };
+  if (block.kind === "grid" || block.kind === "box") {
+    const schema = block.kind === "box" && depth > 0 ? AtomicLeafBlockSchema : LayoutLeafSchema;
+    value = { ...block, children: children(block.children, schema) };
+  }
   else if (block.kind === "tabs" || block.kind === "accordion") {
     const field = block.kind === "tabs" ? "tabs" : "items";
-    if (Array.isArray(block[field])) value = { ...block, [field]: block[field].map((item) =>
-      item && typeof item === "object" ? { ...item, children: children(item.children) } : item) };
+    const schema = block.kind === "tabs" ? TabItemSchema : AccordionItemSchema;
+    if (Array.isArray(block[field])) value = { ...block, [field]: block[field].flatMap((item) => {
+      const panel = item && typeof item === "object" ? { ...item, children: children(item.children, ContainerChildSchema) } : item;
+      if (schema.safeParse(panel).success) return [panel];
+      pending = true;
+      return [];
+    }) };
   }
   return { value, pending };
 }

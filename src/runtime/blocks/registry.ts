@@ -16,6 +16,7 @@ import { renderTimeline } from "./timeline.js";
 import { renderCode } from "./code.js";
 import { renderGraph } from "./graph.js";
 import { renderTable } from "./table.js";
+import { renderBox, renderDivider, renderIcon, renderInlineAtom } from "./atoms.js";
 
 const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   choices: renderChoices,
@@ -35,6 +36,13 @@ const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   code: renderCode,
   graph: renderGraph,
   table: renderTable,
+  box: renderBox,
+  text: renderInlineAtom,
+  title: renderInlineAtom,
+  caption: renderInlineAtom,
+  badge: renderInlineAtom,
+  divider: renderDivider,
+  icon: renderIcon,
 };
 
 export function renderBlock<K extends BlockKind>(

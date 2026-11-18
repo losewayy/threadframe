@@ -309,14 +309,13 @@ class Parser {
         if (close.type !== "paren" || close.value !== ")") {
           throw new Error(`Expected ')' closing call to ${tok.value}`);
         }
-        const fn = FUNCTIONS[tok.value];
-        if (!fn) {
+        if (!Object.hasOwn(FUNCTIONS, tok.value)) {
           throw new Error(`Unsupported formula function '${tok.value}'`);
         }
-        return fn(...args);
+        return FUNCTIONS[tok.value](...args);
       }
 
-      if (tok.value in this.scope) {
+      if (Object.hasOwn(this.scope, tok.value)) {
         return this.scope[tok.value];
       }
       return 0;

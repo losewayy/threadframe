@@ -1,9 +1,9 @@
-import { el } from "../core/dom.js";
+import { el, icon } from "../core/dom.js";
 import { svgCanvas, svgNode, svgText } from "../core/svg.js";
 import type { BlockRenderer } from "../core/types.js";
 import { evaluateFormula, evaluateNumericFormula, type VarScope } from "../formula.js";
 import { formatNumber } from "../display.js";
-import { layoutGraph } from "../graphLayout.js";
+import { fitGraphLabel, layoutGraph } from "../graphLayout.js";
 
 function active(expr: string, scope: VarScope): boolean {
   const value = evaluateFormula(expr, scope);
@@ -18,9 +18,11 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
   const key = state.containerKey(block);
   const layout = layoutGraph(block.nodes, block.edges, block.direction);
   const wrap = el("div", "iui-graph-block");
+  const viewport = el("div", "iui-graph-viewport");
   const canvas = svgCanvas(layout.width, layout.height, block.title ?? "Node graph");
   canvas.setAttribute("role", "group");
   canvas.classList.add("iui-graph");
+  canvas.style.setProperty("--iui-graph-width", `${layout.width}px`);
   const byId = new Map(block.nodes.map((node) => [node.id, node]));
   const edgeViews = layout.edges.map((route) => {
     const edge = block.edges.find((candidate) => candidate.from === route.from && candidate.to === route.to);
@@ -52,17 +54,25 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
     boxRect.setAttribute("y", String(box.y));
     boxRect.setAttribute("width", String(box.width));
     boxRect.setAttribute("height", String(box.height));
-    boxRect.setAttribute("rx", "8");
+    boxRect.setAttribute("rx", "12");
     group.appendChild(boxRect);
-    group.appendChild(svgText(box.x + 12, box.y + (subtitle ? 24 : 28), node.label, "iui-graph-label"));
-    if (subtitle) group.appendChild(svgText(box.x + 12, box.y + 42, subtitle, "iui-graph-role"));
-    const value = node.valueFormula
-      ? svgText(box.x + box.width - 12, box.y + 24, "", "iui-graph-value")
-      : undefined;
-    if (value) {
-      value.setAttribute("text-anchor", "end");
-      group.appendChild(value);
+    const labelY = box.y + (subtitle || node.valueFormula ? 24 : 28);
+    const iconWidth = node.icon ? 22 : 0;
+    if (node.icon) {
+      const pictogram = icon(node.icon);
+      pictogram.classList.add("iui-graph-icon");
+      pictogram.setAttribute("x", String(box.x + 12));
+      pictogram.setAttribute("y", String(labelY - 13));
+      pictogram.setAttribute("width", "16");
+      pictogram.setAttribute("height", "16");
+      group.appendChild(pictogram);
     }
+    group.appendChild(svgText(box.x + 12 + iconWidth, labelY, fitGraphLabel(node.label, box.width - 24 - iconWidth), "iui-graph-label"));
+    if (subtitle) group.appendChild(svgText(box.x + 12, box.y + 42, fitGraphLabel(subtitle, box.width - 24), "iui-graph-role"));
+    const value = node.valueFormula
+      ? svgText(box.x + 12, box.y + (subtitle ? 60 : 42), "", "iui-graph-value")
+      : undefined;
+    if (value) group.appendChild(value);
     group.addEventListener("click", () => selectNode(node.id));
     group.addEventListener("keydown", (event) => {
       const key = (event as KeyboardEvent).key;
@@ -71,7 +81,7 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
       selectNode(node.id);
     });
     canvas.appendChild(group);
-    return { node, group, value };
+    return { node, group, value, valueWidth: box.width - 24 };
   });
   const selectNode = (id: string) => {
     state.nodeSelections.set(key, id);
@@ -80,9 +90,9 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
       view.group.classList.toggle("selected", selected);
       view.group.setAttribute("aria-pressed", String(selected));
       if (selected) {
-        detail.textContent = view.node.detail
-          ? `${view.node.label}: ${view.node.detail}`
-          : `${view.node.label}${view.node.role ? `: ${view.node.role}` : ""}`;
+        const description = view.node.detail ?? view.node.role;
+        detail.hidden = !description;
+        detail.textContent = description ? `${view.node.label}: ${description}` : "";
       }
     }
   };
@@ -90,14 +100,16 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
   if (initial) selectNode(initial.node.id);
   // Draw labels last so later edge paths never strike through them.
   for (const view of edgeViews) if (view.label) canvas.appendChild(view.label);
-  wrap.appendChild(canvas);
+  viewport.appendChild(canvas);
+  wrap.appendChild(viewport);
   if (block.caption) wrap.appendChild(el("p", "iui-vector-caption", block.caption));
   wrap.appendChild(detail);
   bindings.push({
     update: (scope) => {
-      for (const { node, value } of nodeViews) {
+      for (const { node, value, valueWidth } of nodeViews) {
         if (value && node.valueFormula) {
-          value.textContent = `${formatNumber(evaluateNumericFormula(node.valueFormula, scope, 0))}${node.unit ? ` ${node.unit}` : ""}`;
+          const result = `${formatNumber(evaluateNumericFormula(node.valueFormula, scope, 0))}${node.unit ? ` ${node.unit}` : ""}`;
+          value.textContent = fitGraphLabel(result, valueWidth);
         }
       }
       for (const view of edgeViews) {

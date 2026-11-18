@@ -6,7 +6,7 @@
 
 [中文说明](README.zh-CN.md)
 
-**ThreadFrame** is an open-source streaming UI runtime and MCP Apps server (`ui://`, SEP-1865) that renders interactive cards directly inside AI chat threads. Agents emit compact declarative JSON; ThreadFrame streams blocks progressively, computes formulas locally without `eval`, draws reactive vector graphics, and adapts automatically to each host client.
+**ThreadFrame** is an open-source streaming UI runtime and MCP Apps server (`ui://`, SEP-1865) that renders interactive cards inside AI chats. Agents describe cards with compact tags or declarative JSON. ThreadFrame previews complete blocks as arguments arrive, calculates formulas locally, and adapts the result to each host.
 
 ![ThreadFrame interactive launch-kit demo](docs/demo.gif)
 
@@ -64,9 +64,25 @@ ThreadFrame inspects each client's advertised MCP capabilities during handshake 
 - **Embedded HTML hosts** (such as Antigravity, or when `THREADFRAME_HOST=antigravity` is set on non-UI hosts): supports passing `embedPath` in local `--stdio` mode to write a compact, transparent `--embed` HTML artifact directly to disk without bloating model context.
 - **Terminal / text-only clients**: returns clean structured Markdown tables, bullet summaries, and interpolated code fences automatically.
 
-## Component Catalog (17 Kinds)
+## Compose a card with `render_markup`
 
-There are **14 leaf blocks** and **3 layout containers**:
+Use the shortcut tools for standard calculators, decisions, and diagrams. Use `render_markup` for a custom layout. It takes a `markup` string and optional `title`, `subtitle`, and `badge`, which can also live on a single outer `<frame>`.
+
+```jsx
+<frame title="Transfer capacity">
+  <slider id="workers" label="Workers" min={1} max={8} default={3}/>
+  <box tint="accent" padding="md">
+    <title>Estimated throughput</title>
+    <text>**{workers * 4} jobs/s** at full utilization</text>
+  </box>
+</frame>
+```
+
+- Quote strings. Use braces around numbers, booleans, and safe formulas. `{expression}` in text, titles, captions, and badges updates from control IDs. Inline text supports bold and backtick code. Write `&lt;` and `&#123;` for literal delimiters.
+- For data, use `<plot><curve/></plot>`, `<graph><node/><edge/></graph>`, or `<table><column/><row><cell/></row></table>`. For reusable actions, add a top-level `<button label="Copy summary" action="copy_state"/>` or set declared control values with `<choice><set var="workers" value={4}/></choice>`.
+- Use one question, 1–3 inputs, one main visual, and 1–3 results. Aim for about 450px in chat and keep longer explanation in the surrounding reply. Read `threadframe://examples/markup` for complete inputs.
+
+## Component Catalog
 
 | Category | Kinds | Purpose |
 | --- | --- | --- |
@@ -75,9 +91,10 @@ There are **14 leaf blocks** and **3 layout containers**:
 | Comparison & flow | `compare`, `checklist`, `timeline`, `architecture` | Comparison matrices, stateful checklists, selectable step timelines, and interactive layered diagrams. |
 | Topology & data | `graph`, `table` | Auto-laid node/edge graphs with no manual coordinates; sortable, filterable engineering tables with derived cells. |
 | Notes & config | `callout`, `code` | Semantic callouts and `{{var}}`-interpolated, copyable command/config snippets. |
-| Layout containers | `grid`, `tabs`, `accordion` | Responsive multi-column grids, persistent tabs, and collapsible sections sharing live variable bindings. |
+| Layout and inline content | `box`, `text`, `title`, `caption`, `badge`, `divider`, `icon` | Row or column layouts, semantic tints, live text, and built-in SVG icons. |
+| Layout containers | `grid`, `tabs`, `accordion` | Responsive grids, persistent tabs, and collapsible sections sharing live variable bindings. |
 
-Nesting is intentionally bounded: `grid` holds leaves; `tabs` and `accordion` items hold leaves or one `grid`. Hidden tabs and collapsed accordions stay mounted so controls and charts across panels stay synchronized.
+A top-level `box` or a `grid` can hold ordinary blocks and one level of shallow boxes. A shallow box holds only text, headings, captions, badges, dividers, and icons. A tab or accordion section can hold ordinary blocks, shallow boxes, or a grid. Hidden panels stay mounted so controls and charts remain synchronized.
 
 Built-in presets (`inspect_preset_frame`): `gpu-vram-tuner`, `runtime-compare`, `deploy-checklist`, `mcp-architecture`, `composable-workbench`, `svg-visual-lab`, `agent-launch-kit`.
 
@@ -95,8 +112,8 @@ flowchart LR
   Core --> Pure[Schemas / Formula Engine / Fallback]
 ```
 
-- **MCP Tools**: `render_threadframe` (renders any custom `UiSpec`), `inspect_preset_frame` (renders a showcase preset), and the compact shortcuts `present_calculator`, `present_decision`, and `present_diagram`. Shortcuts expand into a standard UiSpec through a pure compiler, so Zod validation, rendering, `--embed`, and Markdown fallback stay single-sourced.
-- **MCP Resources**: `ui://threadframe/view.html` (the single-file runtime bundle), `threadframe://examples/svg` (three editable SVG + control recipes), and `threadframe://examples/recipes` (minimal shortcut inputs).
+- **MCP Tools** include `render_threadframe` for raw UiSpec, `render_markup` for tagged layouts, `inspect_preset_frame` for presets, and the shortcuts `present_calculator`, `present_decision`, and `present_diagram`. They share UiSpec, rendering, embed export, and Markdown fallback.
+- **MCP Resources** include the runtime at `ui://threadframe/view.html` and examples at `threadframe://examples/markup`, `threadframe://examples/svg`, and `threadframe://examples/recipes`.
 - **Formulas & Templates**: Controls bind variables into an arithmetic/comparison/ternary recursive-descent parser (`min`, `max`, `abs`, `floor`, `ceil`, `round`, `clamp`, `if`, plus string `+` concatenation). Curve plots sample formulas over a domain and break at undefined points. Code blocks substitute `{{var}}` safely via `textContent`. See [docs/example.json](docs/example.json).
 - **Snapshot Loop (opt-in)**: When a local `--stdio` shortcut call provides an explicit `statePath`, the Apply & remember action writes a compact JSON snapshot; `read_threadframe_state` returns it on the next turn. Without `statePath`, nothing touches disk.
 

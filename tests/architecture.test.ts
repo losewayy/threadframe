@@ -80,10 +80,12 @@ const layerZero = new Set([
   "src/schema/vector.ts", "src/runtime/vector.ts",
   "src/runtime/display.ts",
   "src/schema/content.ts",
+  "src/schema/atoms.ts", "src/schema/inlineText.ts",
   "src/schema/graph.ts", "src/schema/table.ts",
   "src/runtime/graphLayout.ts", "src/runtime/curve.ts", "src/runtime/table.ts",
   "src/runtime/summary.ts",
   "src/compile.ts",
+  "src/schema/markup.ts", "src/schema/markupSyntax.ts", "src/schema/markupTags.ts",
 ]);
 const blockLeaves = new Set([
   "choices", "controls", "chart", "compare", "checklist", "architecture",
@@ -91,11 +93,13 @@ const blockLeaves = new Set([
   "plot", "svg",
   "stats", "timeline", "code",
   "graph", "table",
+  "atoms",
 ].map((name) => `${blocks}${name}.ts`));
 const blockImports = new Set([
   `${core}types.ts`, `${core}dom.ts`, `${core}state.ts`, "src/runtime/formula.ts", "src/schema/uiSpec.ts",
   `${core}svg.ts`, "src/runtime/vector.ts",
   "src/runtime/display.ts",
+  "src/schema/inlineText.ts",
   "src/runtime/graphLayout.ts", "src/runtime/table.ts", `${core}plotCurve.ts`,
 ]);
 
