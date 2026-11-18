@@ -84,7 +84,8 @@ export const renderTable: BlockRenderer<"table"> = (block, context) => {
       const tr = el("tr", row.tone ? `tone ${row.tone}` : undefined);
       for (const column of block.columns) {
         const value = resolveCell(row, column, state.scope);
-        const cell = el("td", column.key === block.filter?.key && typeof value === "string" ? "iui-status-cell" : undefined,
+        const statusCell = column.key === block.filter?.key && typeof value === "string";
+        const cell = el("td", statusCell ? `iui-status-cell ${row.tone ?? ""}` : undefined,
           formatCell(value, column.precision));
         if (column.align) cell.style.textAlign = column.align;
         tr.appendChild(cell);

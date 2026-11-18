@@ -393,6 +393,26 @@
   text-align: center !important;
 }
 
+.iui-status-cell.success {
+  color: var(--iui-success);
+  font-weight: 600;
+}
+
+.iui-status-cell.warn {
+  color: var(--iui-warn);
+  font-weight: 600;
+}
+
+.iui-status-cell.accent {
+  color: var(--iui-accent);
+  font-weight: 600;
+}
+
+.iui-status-cell.primary {
+  color: var(--iui-text);
+  font-weight: 600;
+}
+
 .iui-graph {
   max-width: 100%;
   height: auto;

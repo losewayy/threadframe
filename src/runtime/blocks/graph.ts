@@ -42,10 +42,11 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
   detail.setAttribute("role", "status");
   const nodeViews = layout.nodes.map((box) => {
     const node = byId.get(box.id)!;
+    const subtitle = [node.group, node.role].filter(Boolean).join(" · ");
     const group = svgNode("g", `iui-graph-node ${node.tone ?? "primary"}`);
     group.setAttribute("tabindex", "0");
     group.setAttribute("role", "button");
-    group.setAttribute("aria-label", `${node.label}${node.role ? `, ${node.role}` : ""}`);
+    group.setAttribute("aria-label", `${node.label}${subtitle ? `, ${subtitle}` : ""}`);
     const boxRect = svgNode("rect", "iui-graph-box");
     boxRect.setAttribute("x", String(box.x));
     boxRect.setAttribute("y", String(box.y));
@@ -53,8 +54,8 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
     boxRect.setAttribute("height", String(box.height));
     boxRect.setAttribute("rx", "8");
     group.appendChild(boxRect);
-    group.appendChild(svgText(box.x + 12, box.y + (node.role ? 24 : 28), node.label, "iui-graph-label"));
-    if (node.role) group.appendChild(svgText(box.x + 12, box.y + 42, node.role, "iui-graph-role"));
+    group.appendChild(svgText(box.x + 12, box.y + (subtitle ? 24 : 28), node.label, "iui-graph-label"));
+    if (subtitle) group.appendChild(svgText(box.x + 12, box.y + 42, subtitle, "iui-graph-role"));
     const value = node.valueFormula
       ? svgText(box.x + box.width - 12, box.y + 24, "", "iui-graph-value")
       : undefined;

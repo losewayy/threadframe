@@ -28,7 +28,7 @@ function assertDisjoint(boxes: Array<{ x: number; y: number; width: number; heig
 test("graph layout is deterministic, bounded, non-overlapping, and survives cycles", () => {
   const nodes = [
     { id: "a", label: "Alpha", role: "Source" },
-    { id: "b", label: "Beta" },
+    { id: "b", label: "Beta", group: "core" },
     { id: "c", label: "Gamma", role: "Sink" },
     { id: "d", label: "Delta" },
   ];
@@ -62,6 +62,8 @@ test("curve sampling breaks on undefined points and recomputes with scope variab
   assert.ok(segments.every((segment) => segment.every((point) => point.y !== null)));
   const scaled = sampleCurve("x * gain", 0, 10, 3, { gain: 2 });
   assert.deepEqual(scaled.map((point) => point.y), [0, 10, 20]);
+  const renamed = sampleCurve("t * gain", 0, 2, 3, { gain: 2 }, "t");
+  assert.deepEqual(renamed.map((point) => point.y), [0, 2, 4]);
   const summary = curveSummary(scaled);
   assert.deepEqual(summary.map((point) => point.label), ["Start", "Midpoint", "End", "Minimum", "Maximum"]);
 });

@@ -15,12 +15,13 @@ export function sampleCurve(
   xMax: number,
   samples: number | undefined,
   scope: VarScope,
+  variable = "x",
 ): CurvePoint[] {
   const count = Math.max(2, Math.min(400, Math.trunc(samples ?? 80)));
   const points: CurvePoint[] = [];
   for (let index = 0; index < count; index++) {
     const x = xMin + (xMax - xMin) * index / (count - 1);
-    const y = evaluateNumericSample(formula, { ...scope, x });
+    const y = evaluateNumericSample(formula, { ...scope, [variable]: x });
     points.push({ x, y: Number.isFinite(y) ? y : null });
   }
   return points;

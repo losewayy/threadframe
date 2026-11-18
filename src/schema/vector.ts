@@ -24,6 +24,7 @@ export const PlotBlockSchema = z.object({
   curves: z.array(CurveSeriesSchema).min(1).optional(),
   xMin: z.number().optional(),
   xMax: z.number().optional(),
+  xVariable: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).optional(),
   samples: z.number().int().min(2).max(400).optional(),
   xLabel: z.string().optional(),
   yLabel: z.string().optional(),

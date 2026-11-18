@@ -47,7 +47,7 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
     case "plot": {
       if (block.curves?.length) {
         for (const curve of block.curves) {
-          const samples = sampleCurve(curve.formula, block.xMin ?? 0, block.xMax ?? 1, block.samples, scope);
+          const samples = sampleCurve(curve.formula, block.xMin ?? 0, block.xMax ?? 1, block.samples, scope, block.xVariable);
           const summary = curveSummary(samples);
           lines.push(`- ${curve.label}: \`${curve.formula}\``);
           if (!summary.length) {

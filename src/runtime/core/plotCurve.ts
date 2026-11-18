@@ -19,6 +19,7 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
   const curves = block.curves ?? [];
   const xMin = block.xMin ?? 0;
   const xMax = block.xMax ?? 1;
+  const variable = block.xVariable ?? "x";
   const count = Math.max(2, Math.min(400, Math.trunc(block.samples ?? 80)));
   const unit = block.unit ? ` ${block.unit}` : "";
   const format = (value: number) => formatNumber(value, block.precision);
@@ -57,7 +58,7 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
   wrap.append(canvas, readout);
 
   let focused = -1;
-  let series = curves.map((curve) => ({ curve, samples: sampleCurve(curve.formula, xMin, xMax, count, {}) }));
+  let series = curves.map((curve) => ({ curve, samples: sampleCurve(curve.formula, xMin, xMax, count, {}, variable) }));
   const refresh = () => {
     if (focused < 0) {
       readout.textContent = "Hover, focus, or use arrow keys to inspect samples.";
@@ -66,7 +67,7 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
     const index = Math.min(focused, count - 1);
     readout.textContent = series.map(({ curve, samples }) => {
       const value = samples[index]?.y;
-      return `${curve.label} x=${format(samples[index]?.x ?? 0)} y=${value === null || value === undefined ? "undefined" : `${format(value)}${unit}`}`;
+      return `${curve.label} ${variable}=${format(samples[index]?.x ?? 0)} y=${value === null || value === undefined ? "undefined" : `${format(value)}${unit}`}`;
     }).join(" | ");
   };
   const indexAt = (clientX: number) => {
@@ -92,7 +93,7 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
 
   context.bindings.push({
     update: (scope) => {
-      series = curves.map((curve) => ({ curve, samples: sampleCurve(curve.formula, xMin, xMax, count, scope) }));
+      series = curves.map((curve) => ({ curve, samples: sampleCurve(curve.formula, xMin, xMax, count, scope, variable) }));
       const values = series.flatMap(({ samples }) => samples.flatMap((point) => point.y === null ? [] : [point.y]));
       const upper = block.maxFormula ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? 0) : block.max ?? 0;
       const min = Math.min(0, ...values);

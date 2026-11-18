@@ -43,7 +43,7 @@ function textWidth(text: string | undefined): number {
 
 function measureNode(node: GraphNode): { width: number; height: number } {
   const width = Math.max(96, Math.min(220, Math.max(textWidth(node.label) + 28, textWidth(node.role) + 28)));
-  return { width, height: node.role ? 64 : 46 };
+  return { width, height: node.role || node.group ? 64 : 46 };
 }
 
 function edgeKey(edge: GraphEdge): string {
@@ -103,13 +103,17 @@ function sortLayer(
   neighbors: ReadonlyMap<string, string[]>,
   positions: ReadonlyMap<string, number>,
   order: ReadonlyMap<string, number>,
+  groups: ReadonlyMap<string, string>,
 ): string[] {
   const score = (id: string) => {
     const adjacent = neighbors.get(id) ?? [];
     if (!adjacent.length) return order.get(id) ?? 0;
     return adjacent.reduce((sum, other) => sum + (positions.get(other) ?? 0), 0) / adjacent.length;
   };
-  return [...ids].sort((a, b) => score(a) - score(b) || (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  const group = (id: string) => groups.get(id) ?? "";
+  return [...ids].sort((a, b) => score(a) - score(b)
+    || group(a).localeCompare(group(b))
+    || (order.get(a) ?? 0) - (order.get(b) ?? 0));
 }
 
 function layerGroups(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): string[][] {
@@ -125,6 +129,8 @@ function layerGroups(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): 
   const compact = layers.filter((ids) => ids?.length);
   const order = new Map<string, number>();
   nodes.forEach((node, index) => order.set(node.id, index));
+  const groups = new Map<string, string>();
+  for (const node of nodes) if (node.group) groups.set(node.id, node.group);
   const predecessors = new Map<string, string[]>();
   const successors = new Map<string, string[]>();
   for (const edge of dag) {
@@ -135,11 +141,11 @@ function layerGroups(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): 
     const positions = new Map<string, number>();
     compact.forEach((ids) => ids.forEach((id, index) => positions.set(id, index)));
     for (let index = 1; index < compact.length; index++) {
-      compact[index] = sortLayer(compact[index], predecessors, positions, order);
+      compact[index] = sortLayer(compact[index], predecessors, positions, order, groups);
     }
     compact.forEach((ids) => ids.forEach((id, index) => positions.set(id, index)));
     for (let index = compact.length - 2; index >= 0; index--) {
-      compact[index] = sortLayer(compact[index], successors, positions, order);
+      compact[index] = sortLayer(compact[index], successors, positions, order, groups);
     }
   }
   return compact;
