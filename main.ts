@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer, readUiBundleHtml } from "./server.js";
 import { PRESETS } from "./src/presets.js";
-import { UiSpecSchema, type UiSpec } from "./src/schema/uiSpec.js";
+import { UiSpecSchema, choiceAssignmentIssues, type UiSpec } from "./src/schema/uiSpec.js";
 import { injectStandaloneHtml } from "./src/export.js";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +30,9 @@ async function exportStandaloneHtml(source: string, outputPath: string, embed: b
     const raw = source === "-" ? Buffer.concat(chunks).toString("utf8") : await fs.readFile(path.resolve(source), "utf-8");
     spec = UiSpecSchema.parse(JSON.parse(raw));
   }
+
+  const issues = choiceAssignmentIssues(spec.blocks);
+  if (issues.length) throw new Error(`Invalid ThreadFrame spec:\n- ${issues.join("\n- ")}`);
 
   const bundleHtml = await readUiBundleHtml();
   const injected = injectStandaloneHtml(bundleHtml, spec, { embed });
@@ -86,6 +89,11 @@ export async function startHttpServer(makeServer: () => McpServer): Promise<void
     const parsed = UiSpecSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(422).json({ issues: parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })) });
+      return;
+    }
+    const issues = choiceAssignmentIssues(parsed.data.blocks);
+    if (issues.length) {
+      res.status(422).json({ issues: issues.map((message) => ({ path: [], message })) });
       return;
     }
     res.json({ spec: parsed.data });

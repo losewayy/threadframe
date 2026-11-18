@@ -16,7 +16,8 @@ import { UiStateStore } from "../src/runtime/core/state.js";
 import { interpolateCode } from "../src/runtime/display.js";
 import { evaluateFormula, evaluateNumericFormula } from "../src/runtime/formula.js";
 import { renderFallbackMarkdown } from "../src/schema/fallback.js";
-import { parsePartialUiSpec, UiSpecSchema, walkBlocks } from "../src/schema/uiSpec.js";
+import { parsePartialUiSpec, UiSpecSchema, choiceAssignmentIssues, walkBlocks } from "../src/schema/uiSpec.js";
+import { VERSION } from "../src/version.js";
 
 test("formula evaluator computes arithmetic, ternary, and built-in math safely", () => {
   const scope = { quant: "Q4_K", ctx_k: 16, batch: 2, flash_attn: true };
@@ -223,13 +224,42 @@ test("vector fallback resolves control formulas and degrades unfinished expressi
   assert.ok(!fallback.includes("NaN") && !fallback.includes("undefined"));
 });
 
+test("choice presets only assign declared, in-range control variables", () => {
+  const controls = [
+    { kind: "slider", id: "gain", label: "Gain", min: 0, max: 10, defaultValue: 2 },
+    { kind: "select", id: "format", label: "Format", options: ["Q4_K", "FP16"], defaultValue: "Q4_K" },
+    { kind: "toggle", id: "flash", label: "Flash", defaultValue: false },
+  ];
+  const spec = (setVars?: Record<string, number | string | boolean>, withControls = true) => UiSpecSchema.parse({
+    title: "Preset assignment",
+    blocks: [
+      ...(withControls ? [{ kind: "controls", controls }] : []),
+      { kind: "choices", options: [{ id: "profile", label: "Profile", setVars }] },
+    ],
+  });
+  assert.deepEqual(choiceAssignmentIssues(spec({ gain: 6, format: "FP16", flash: true }).blocks), []);
+  const cases: Array<[Record<string, number | string | boolean>, RegExp]> = [
+    [{ ghost: 1 }, /ghost.*no controls block declares/],
+    [{ format: "Q6_K" }, /expected one of Q4_K, FP16/],
+    [{ gain: 11 }, /expected a number from 0 to 10/],
+    [{ gain: "6" }, /expected a number from 0 to 10/],
+    [{ flash: 1 }, /expected a boolean/],
+  ];
+  for (const [setVars, message] of cases) {
+    const issues = choiceAssignmentIssues(spec(setVars).blocks);
+    assert.equal(issues.length, 1);
+    assert.match(issues[0], message);
+  }
+  assert.match(choiceAssignmentIssues(spec({ gain: 6 }, false).blocks)[0], /no controls block declares/);
+});
+
 test("nested state defaults and container selections survive new streaming objects", () => {
   const state = new UiStateStore();
   const spec = nestedSpec();
   state.initDefaults(spec.blocks);
   assert.equal(state.scope.nested_x, 4);
   assert.equal(state.checklistState.get("nested_check"), true);
-  assert.equal(state.selectedNodeId, "nested_node");
+  assert.deepEqual([...state.nodeSelections.values()], ["nested_node"]);
   const tabKey = state.containerKey(spec.blocks[0]);
   const accordionKey = state.containerKey(spec.blocks[1]);
   const itemKey = JSON.stringify([accordionKey, "details"]);
@@ -247,6 +277,20 @@ test("nested state defaults and container selections survive new streaming objec
   const sibling = nestedSpec().blocks[0];
   state.initDefaults([next.blocks[0], sibling]);
   assert.notEqual(state.containerKey(sibling), tabKey);
+
+  const stacks = UiSpecSchema.parse({ title: "Two stacks", blocks: [
+    { kind: "architecture", id: "first", layers: [{ layer: "One", nodes: [
+      { id: "a1", label: "A1", role: "Compute" }, { id: "a2", label: "A2", role: "Compute" },
+    ] }] },
+    { kind: "architecture", id: "second", layers: [{ layer: "Two", nodes: [{ id: "b1", label: "B1", role: "Compute" }] }] },
+  ] });
+  const architectureState = new UiStateStore();
+  architectureState.initDefaults(stacks.blocks);
+  const [firstKey, secondKey] = stacks.blocks.map((block) => architectureState.containerKey(block));
+  assert.equal(architectureState.nodeSelections.get(firstKey), "a1");
+  assert.equal(architectureState.nodeSelections.get(secondKey), "b1");
+  architectureState.nodeSelections.set(firstKey, "a2");
+  assert.equal(architectureState.nodeSelections.get(secondKey), "b1");
 });
 
 test("formula evaluator returns null / fallback cleanly on malformed partial strings", () => {
@@ -328,6 +372,7 @@ test("all built-in presets conform to UiSpecSchema and render non-empty Markdown
   for (const [key, spec] of Object.entries(PRESETS)) {
     const validated = UiSpecSchema.parse(spec);
     assert.ok(validated.blocks.length >= 1, `${key} should have at least one block`);
+    assert.deepEqual(choiceAssignmentIssues(validated.blocks), [], `${key} assigns undeclared variables`);
 
     const md = renderFallbackMarkdown(validated);
     assert.ok(md.includes(validated.title), `${key} markdown missing title`);
@@ -337,6 +382,11 @@ test("all built-in presets conform to UiSpecSchema and render non-empty Markdown
   for (const spec of Object.values(SVG_EXAMPLES)) {
     assert.ok(renderFallbackMarkdown(UiSpecSchema.parse(spec)).includes(spec.title));
   }
+});
+
+test("runtime version stays in sync with the published package version", async () => {
+  const manifest = JSON.parse(await fs.readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+  assert.equal(VERSION, manifest.version);
 });
 
 const appsCapabilities: ClientCapabilities = { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [RESOURCE_MIME_TYPE] } } };
@@ -405,12 +455,31 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.equal(result.content[0].text, renderFallbackMarkdown(spec));
           const listing = await client.request("tools/list", {});
           const tools = z.array(z.object({ name: z.string(), inputSchema: z.record(z.string(), z.unknown()) })).parse(listing.tools);
+          for (const name of ["render_threadframe", "present_calculator", "present_decision"]) {
+            assert.ok(tools.some((tool) => tool.name === name), `${name} should be registered`);
+          }
           const schema = JSON.stringify(tools.find((tool) => tool.name === "render_threadframe")!.inputSchema);
           for (const kind of ["controls", "stats", "svg", "timeline", "grid"]) assert.ok(schema.includes(`"const":"${kind}"`));
           assert.ok(!schema.includes('"$ref"'));
           const examples = await client.request("resources/read", { uri: "threadframe://examples/svg" });
           const resources = z.array(z.object({ text: z.string() })).parse(examples.contents);
           for (const example of Object.values(JSON.parse(resources[0].text))) UiSpecSchema.parse(example);
+          const recipeResult = await client.request("resources/read", { uri: "threadframe://examples/recipes" });
+          const recipes = JSON.parse(z.array(z.object({ text: z.string() })).parse(recipeResult.contents)[0].text);
+          const shortcut = resultSchema.parse(await client.request("tools/call", { name: "present_calculator", arguments: recipes.calculator }));
+          assert.ok(shortcut.structuredContent);
+          const rejectedShortcut = resultSchema.parse(await client.request("tools/call", {
+            name: "present_calculator",
+            arguments: { title: "Bad tuning", inputs: [{ kind: "slider", label: "A", min: 0, max: 1 }], metrics: [{ label: "M", formula: "ghost" }] },
+          }));
+          assert.equal(rejectedShortcut.isError, true);
+          assert.ok(rejectedShortcut.content[0].text.includes("unknown variable"));
+          const rejected = resultSchema.parse(await client.request("tools/call", {
+            name: "render_threadframe",
+            arguments: { title: "Undeclared variable", blocks: [{ kind: "choices", options: [{ id: "bad", label: "Bad", setVars: { ghost: 1 } }] }] },
+          }));
+          assert.equal(rejected.isError, true);
+          assert.ok(rejected.content[0].text.includes("setVars.ghost"));
         } else if (scenario.local) {
           assert.equal(result.isError, undefined);
           assert.ok(result.content[0].text.includes("file:///"));

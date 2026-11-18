@@ -1,3 +1,4 @@
+import type { CalculatorInput, DecisionInput } from "./compile.js";
 import type { UiSpec } from "./schema/uiSpec.js";
 
 export const SVG_EXAMPLES: Record<string, UiSpec> = {
@@ -30,6 +31,43 @@ export const SVG_EXAMPLES: Record<string, UiSpec> = {
         { type: "rect", x: 10, y: 10, widthFormula: "size * 2", heightFormula: "size", rx: 4, fill: "success", opacity: 0.5 },
         { type: "text", x: 10, y: 130, textFormula: "size * 2 + ' × ' + size", fontSize: 14 },
       ] },
+    ],
+  },
+};
+
+/** Minimal copy-paste recipes for the shortcut tools. */
+export const RECIPES: { calculator: CalculatorInput; decision: DecisionInput } = {
+  calculator: {
+    title: "GPU memory and throughput budget",
+    subtitle: "Tune quantization, context, and batching before choosing runtime flags.",
+    inputs: [
+      { id: "quant", kind: "select", label: "Weights format", options: ["Q4_K", "Q8_0", "FP16"], defaultValue: "Q4_K" },
+      { id: "context", kind: "slider", label: "Context window", min: 2, max: 64, step: 2, defaultValue: 16, unit: "K" },
+      { id: "batch", kind: "slider", label: "Concurrent sequences", min: 1, max: 8, defaultValue: 2 },
+      { id: "flash", kind: "toggle", label: "KV cache compression", defaultValue: true },
+    ],
+    metrics: [
+      { label: "Estimated VRAM", formula: "round((quant == 'FP16' ? 15.2 : (quant == 'Q8_0' ? 8.6 : 4.6)) + context * batch * (flash ? 0.045 : 0.072) + 0.8, 1)", unit: "GB", precision: 1, warnAbove: 12 },
+    ],
+    bars: [
+      { label: "Weights", formula: "quant == 'FP16' ? 15.2 : (quant == 'Q8_0' ? 8.6 : 4.6)", unit: "GB" },
+      { label: "KV cache", formula: "round(context * batch * (flash ? 0.045 : 0.072), 1)", unit: "GB", tone: "accent" },
+    ],
+    template: "llama-server -m <model> -c {{context}}K --parallel {{batch}}",
+    templateLanguage: "bash",
+  },
+  decision: {
+    title: "Choose a serving stack",
+    subtitle: "Single 12 GB GPU, mostly local single-user workloads.",
+    options: [
+      { id: "llamacpp", label: "llama.cpp", description: "Zero-Python binary, offload support.", recommended: true },
+      { id: "vllm", label: "vLLM", description: "Mature paged attention serving stack." },
+      { id: "sglang", label: "SGLang", description: "Prefix reuse for high-concurrency traffic." },
+    ],
+    criteria: [
+      { label: "Single consumer GPU", values: ["Native", "Heavier base footprint", "CUDA-focused"], winner: 0 },
+      { label: "High concurrency", values: ["Basic slot batching", "PagedAttention", "RadixAttention"], winner: 2 },
+      { label: "Cross-platform", values: ["CUDA, Metal, Vulkan, CPU", "CUDA / ROCm", "CUDA primary"], winner: 0 },
     ],
   },
 };

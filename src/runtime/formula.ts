@@ -326,6 +326,29 @@ class Parser {
 }
 
 /**
+ * Lists identifiers referenced by a formula, excluding literals and function names,
+ * so compilers can reject variables that were never declared.
+ */
+export function formulaIdentifiers(expr: string): string[] {
+  const trimmed = expr.trim();
+  if (!trimmed) return [];
+  let tokens: Token[];
+  try {
+    tokens = tokenize(trimmed);
+  } catch {
+    return [];
+  }
+  const names = new Set<string>();
+  tokens.forEach((token, index) => {
+    if (token.type !== "id" || token.value === "true" || token.value === "false") return;
+    const next = tokens[index + 1];
+    if (next?.type === "paren" && next.value === "(") return;
+    names.add(token.value);
+  });
+  return [...names];
+}
+
+/**
  * Evaluates a formula expression safely against the current control variable scope.
  * Returns null if the expression is empty or invalid so partial streams degrade cleanly.
  */

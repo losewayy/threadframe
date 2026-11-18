@@ -224,6 +224,7 @@ export const UiSpecSchema = z.object({
 
 export type UiSpec = z.infer<typeof UiSpecSchema>;
 export type UiBlock = z.infer<typeof UiBlockSchema>;
+export type LeafBlock = z.infer<typeof LeafBlockSchema>;
 export type ControlItem = z.infer<typeof ControlItemSchema>;
 
 export function walkBlocks(blocks: readonly UiBlock[], visitor: (block: UiBlock) => void): void {
@@ -236,6 +237,44 @@ export function walkBlocks(blocks: readonly UiBlock[], visitor: (block: UiBlock)
       for (const item of block.items) walkBlocks(item.children, visitor);
     }
   }
+}
+
+/** Collects every declared control so choice assignments can be checked against real variables. */
+export function declaredControls(blocks: readonly UiBlock[]): Map<string, ControlItem> {
+  const declared = new Map<string, ControlItem>();
+  walkBlocks(blocks, (block) => {
+    if (block.kind === "controls") for (const control of block.controls) declared.set(control.id, control);
+  });
+  return declared;
+}
+
+/**
+ * Checks `choices[].options[].setVars` against declared controls and their domains.
+ * Returns readable issues instead of throwing so tool handlers can reject bad specs with context.
+ */
+export function choiceAssignmentIssues(blocks: readonly UiBlock[]): string[] {
+  const declared = declaredControls(blocks);
+  const issues: string[] = [];
+  walkBlocks(blocks, (block) => {
+    if (block.kind !== "choices") return;
+    for (const option of block.options) {
+      for (const [id, value] of Object.entries(option.setVars ?? {})) {
+        const path = `choices "${option.id}" setVars.${id}`;
+        const control = declared.get(id);
+        if (!control) {
+          issues.push(`${path}: no controls block declares this variable`);
+        } else if (control.kind === "toggle" && typeof value !== "boolean") {
+          issues.push(`${path}: expected a boolean`);
+        } else if (control.kind === "select" && (typeof value !== "string" || !control.options.includes(value))) {
+          issues.push(`${path}: expected one of ${control.options.join(", ")}`);
+        } else if (control.kind === "slider"
+          && (typeof value !== "number" || !Number.isFinite(value) || value < control.min || value > control.max)) {
+          issues.push(`${path}: expected a number from ${control.min} to ${control.max}`);
+        }
+      }
+    }
+  });
+  return issues;
 }
 
 export interface PartialUiSpecResult {

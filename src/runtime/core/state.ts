@@ -12,8 +12,8 @@ export class UiStateStore implements UiState {
   readonly tabSelections = new Map<string, string>();
   readonly accordionOpen = new Map<string, boolean>();
   readonly timelineSelections = new Map<string, string>();
+  readonly nodeSelections = new Map<string, string>();
   private readonly containerKeys = new WeakMap<UiBlock, string>();
-  selectedNodeId: string | null = null;
   private reactiveBindings: ReactiveBinding[] = [];
   private controlSyncCallbacks: ControlSyncCallback[] = [];
 
@@ -55,7 +55,8 @@ export class UiStateStore implements UiState {
   initDefaults(blocks: UiBlock[]): void {
     let containerIndex = 0;
     walkBlocks(blocks, (block) => {
-      if (block.kind === "tabs" || block.kind === "accordion" || block.kind === "timeline") {
+      if (block.kind === "tabs" || block.kind === "accordion" || block.kind === "timeline"
+        || block.kind === "architecture") {
         // Ordinals distinguish anonymous containers while append-only streams keep them stable.
         const key = JSON.stringify([block.kind, block.id ?? containerIndex]);
         containerIndex++;
@@ -73,6 +74,9 @@ export class UiStateStore implements UiState {
             const itemKey = JSON.stringify([key, item.id]);
             if (!this.accordionOpen.has(itemKey)) this.accordionOpen.set(itemKey, Boolean(item.defaultOpen));
           }
+        } else if (block.kind === "architecture" && !this.nodeSelections.has(key)) {
+          const initial = block.layers[0]?.nodes[0];
+          if (initial) this.nodeSelections.set(key, initial.id);
         }
       }
       if (block.kind === "controls") {
@@ -87,9 +91,6 @@ export class UiStateStore implements UiState {
             this.checklistState.set(item.id, Boolean(item.checked));
           }
         }
-      } else if (block.kind === "architecture" && this.selectedNodeId === null) {
-        const firstNode = block.layers[0]?.nodes[0];
-        if (firstNode) this.selectedNodeId = firstNode.id;
       }
     });
   }

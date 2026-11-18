@@ -5,6 +5,7 @@ import type { RenderReport } from "../runtime/core/types.js";
 import { PRESETS } from "../presets.js";
 import { ThreadFrameRenderer } from "../runtime/renderer.js";
 import type { UiSpec } from "../schema/uiSpec.js";
+import { VERSION } from "../version.js";
 import "./styles.css";
 
 declare global {
@@ -28,7 +29,7 @@ function resolveSpecPayload(raw: unknown): unknown {
   return raw;
 }
 
-const app = new App({ name: "ThreadFrame", version: "0.3.0" });
+const app = new App({ name: "ThreadFrame", version: VERSION });
 
 let currentStandaloneSpec: UiSpec | null = window.__THREADFRAME_SPEC__ ?? null;
 const useHostBridge = !currentStandaloneSpec && window.parent !== window;

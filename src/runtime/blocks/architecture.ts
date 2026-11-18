@@ -3,6 +3,7 @@ import type { BlockRenderer } from "../core/types.js";
 
 export const renderArchitecture: BlockRenderer<"architecture"> = (block, context) => {
   const { state } = context;
+  const key = state.containerKey(block);
   const wrap = el("div");
   const layersEl = el("div", "iui-arch-layers");
   const detailBox = el("div", "iui-arch-detail");
@@ -10,7 +11,7 @@ export const renderArchitecture: BlockRenderer<"architecture"> = (block, context
   const nodeButtons: Array<{ id: string; btn: HTMLButtonElement; detail: string }> = [];
 
   const selectNode = (id: string) => {
-    state.selectedNodeId = id;
+    state.nodeSelections.set(key, id);
     for (const item of nodeButtons) {
       item.btn.classList.toggle("selected", item.id === id);
       item.btn.setAttribute("aria-pressed", String(item.id === id));
@@ -47,6 +48,7 @@ export const renderArchitecture: BlockRenderer<"architecture"> = (block, context
 
   wrap.appendChild(layersEl);
   wrap.appendChild(detailBox);
-  if (state.selectedNodeId) selectNode(state.selectedNodeId);
+  const initial = nodeButtons.find((item) => item.id === state.nodeSelections.get(key)) ?? nodeButtons[0];
+  if (initial) selectNode(initial.id);
   return wrap;
 };

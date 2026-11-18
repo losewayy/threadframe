@@ -10,12 +10,14 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { PRESETS } from "./src/presets.js";
 import { renderFallbackMarkdown } from "./src/schema/fallback.js";
-import { UiSpecSchema } from "./src/schema/uiSpec.js";
+import { UiSpecSchema, choiceAssignmentIssues } from "./src/schema/uiSpec.js";
 import type { UiSpec } from "./src/schema/uiSpec.js";
 import { detectClientAdapter } from "./src/clientAdapter.js";
 import { injectStandaloneHtml } from "./src/export.js";
 import { writeEmbedFile } from "./src/embedFile.js";
-import { SVG_EXAMPLES } from "./src/examples.js";
+import { SVG_EXAMPLES, RECIPES } from "./src/examples.js";
+import { VERSION } from "./src/version.js";
+import { CalculatorInputSchema, DecisionInputSchema, compileCalculator, compileDecision } from "./src/compile.js";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const UI_BUNDLE_PATH = path.resolve(THIS_DIR, import.meta.url.endsWith(".ts") ? "dist/mcp-app.html" : "mcp-app.html");
@@ -34,13 +36,17 @@ export async function readUiBundleHtml(): Promise<string> {
 export function createServer(options: { localStdio?: boolean } = {}): McpServer {
   const server = new McpServer({
     name: "threadframe",
-    version: "0.3.0",
+    version: VERSION,
   });
 
   const embedPathSchema = z.string().optional().describe(
     "Optional local .html output path for non-MCP-Apps embedded hosts. Only local --stdio may write files. Native MCP Apps clients should omit this.",
   );
   const respond = async (spec: UiSpec, embedPath?: string) => {
+    const issues = choiceAssignmentIssues(spec.blocks);
+    if (issues.length) {
+      return { isError: true, content: [{ type: "text" as const, text: `Invalid ThreadFrame spec:\n- ${issues.join("\n- ")}` }] };
+    }
     const markdown = renderFallbackMarkdown(spec);
     const mode = detectClientAdapter(server.server.getClientVersion(), server.server.getClientCapabilities(), process.env.THREADFRAME_HOST);
     if (mode === "mcp-apps") return { content: [{ type: "text" as const, text: markdown }], structuredContent: spec };
@@ -58,13 +64,18 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     return { content: [{ type: "text" as const, text: `${markdown}\n\n${hint}` }], structuredContent: spec };
   };
 
+  const compileError = (issues: string[]) => ({
+    isError: true as const,
+    content: [{ type: "text" as const, text: `ThreadFrame could not build this card:\n- ${issues.join("\n- ")}` }],
+  });
+
   registerAppTool(
     server,
     "render_threadframe",
     {
-      title: "Render Inline ThreadFrame",
+      title: "Render Custom ThreadFrame",
       description:
-        'Render declarative MCP Apps UI with Markdown fallback. Leaves: choices (decisions), controls (variables), stats (KPIs), chart (breakdown bars), plot (line/bar/donut), svg (safe diagrams), compare (matrices), checklist (checks), timeline (steps), architecture (layers), callout (notes), code (config previews). Layouts: grid holds leaves; tabs/accordion hold leaves or one grid. Control IDs define variables; formulas use round(x * 2, 1) or string + suffix; code uses {{var}}. Minimal linked example: {"title":"Size","blocks":[{"kind":"controls","controls":[{"kind":"slider","id":"x","label":"Size","min":1,"max":10,"defaultValue":3}]},{"kind":"stats","items":[{"label":"Size","formula":"x"}]},{"kind":"svg","width":120,"height":30,"elements":[{"type":"rect","x":0,"y":0,"widthFormula":"x * 10","height":20,"fill":"primary"}]}]}. Read threadframe://examples/svg for three editable diagrams. Never supply executable HTML or JavaScript.',
+        'Render a fully custom interactive card with the low-level UiSpec schema. Prefer present_calculator for parameter tuning, present_decision for picking among 2-4 options, and present_diagram for node/edge flows; use this tool only when the compact tools cannot express the layout. Blocks: choices, controls, stats, chart, plot, svg, compare, checklist, timeline, architecture, callout, code; containers: grid holds leaves, tabs/accordion hold leaves or one grid. Control ids define variables; formulas support arithmetic, comparisons, ternary and min/max/abs/floor/ceil/round/clamp/if; code uses {{var}}. Keep cards compact: fold secondary detail into tabs or a collapsed accordion, target roughly 450px and stay under about 800px. Never supply executable HTML or JavaScript. Minimal linked example: {"title":"Size","blocks":[{"kind":"controls","controls":[{"kind":"slider","id":"x","label":"Size","min":1,"max":10,"defaultValue":3}]},{"kind":"stats","items":[{"label":"Size","formula":"x"}]},{"kind":"svg","width":120,"height":30,"elements":[{"type":"rect","x":0,"y":0,"widthFormula":"x * 10","height":20,"fill":"primary"}]}]}. Read threadframe://examples/svg or threadframe://examples/recipes for more.',
       inputSchema: UiSpecSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
@@ -73,11 +84,43 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
 
   registerAppTool(
     server,
+    "present_calculator",
+    {
+      title: "Present Tunable Calculator",
+      description:
+        'Use when the answer depends on trade-offs the user should tune: sizing, budgets, memory, throughput, cost, quotas, or configuration parameters. Renders sliders, toggles, and selects with live metrics and a copyable template inside chat. Do not call for factual Q&A, a single command output, or cases with no adjustable parameter. Keep it compact: a few inputs and one or two metrics are ideal; large sets fold into tabs automatically. Inputs are flat: id is optional (a stable id is derived from the label), slider defaults to min 0 max 100 step 1, select requires options, metrics and bars use formulas over input ids, and template placeholders use {{id}}. Provide at least one metric or bar. Example: {"title":"GPU memory budget","inputs":[{"kind":"select","id":"quant","label":"Quantization","options":["Q4_K","FP16"],"defaultValue":"Q4_K"},{"kind":"slider","id":"ctx","label":"Context","min":2,"max":64,"defaultValue":16}],"metrics":[{"label":"VRAM","formula":"quant == \'FP16\' ? 15.2 : 4.6 + ctx * 0.05","unit":"GB"}]}.',
+      inputSchema: CalculatorInputSchema,
+      _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
+    },
+    async (input) => {
+      const compiled = compileCalculator(input);
+      return compiled.ok ? respond(compiled.spec) : compileError(compiled.issues);
+    },
+  );
+
+  registerAppTool(
+    server,
+    "present_decision",
+    {
+      title: "Present Decision Card",
+      description:
+        'Use when the user must choose between 2-4 concrete options (libraries, architectures, rollout plans) and you can state the trade-offs. Builds a comparison matrix plus selectable decision cards with an apply action. Do not call when one option is clearly correct or no decision is needed. criteria values are ordered exactly like options; winner is a 0-based option index; mark at most one option recommended. Option prompts fire an immediate follow-up message when clicked. Example: {"title":"Choose a serving stack","options":[{"label":"llama.cpp","recommended":true},{"label":"vLLM"},{"label":"SGLang"}],"criteria":[{"label":"Single GPU","values":["Native","Heavy","CUDA-focused"],"winner":0}]}.',
+      inputSchema: DecisionInputSchema,
+      _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
+    },
+    async (input) => {
+      const compiled = compileDecision(input);
+      return compiled.ok ? respond(compiled.spec) : compileError(compiled.issues);
+    },
+  );
+
+  registerAppTool(
+    server,
     "inspect_preset_frame",
     {
       title: "Inspect Preset ThreadFrame",
       description:
-        "Renders one of the built-in ThreadFrame showcases (gpu-vram-tuner, runtime-compare, deploy-checklist, mcp-architecture, composable-workbench, svg-visual-lab, agent-launch-kit).",
+        "Render one of the built-in ThreadFrame showpieces. Use it to show the available interaction patterns quickly; presets are demonstrations, not measured data.",
       inputSchema: z.object({
         embedPath: embedPathSchema,
         preset: z
@@ -92,6 +135,10 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
   server.registerResource("Safe SVG examples", "threadframe://examples/svg", {
     mimeType: "application/json", description: "Editable capacity bar, flow arrows and reactive size examples with controls and formulas.",
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(SVG_EXAMPLES) }] }));
+
+  server.registerResource("Shortcut tool recipes", "threadframe://examples/recipes", {
+    mimeType: "application/json", description: "Minimal copy-paste inputs for present_calculator and present_decision.",
+  }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(RECIPES) }] }));
 
   registerAppResource(
     server,

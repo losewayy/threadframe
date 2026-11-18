@@ -80,6 +80,7 @@ const layerZero = new Set([
   "src/schema/vector.ts", "src/runtime/vector.ts",
   "src/runtime/display.ts",
   "src/schema/content.ts",
+  "src/compile.ts",
 ]);
 const blockLeaves = new Set([
   "choices", "controls", "chart", "compare", "checklist", "architecture",
