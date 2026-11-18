@@ -1,16 +1,19 @@
 import { el } from "../core/dom.js";
 import { svgCanvas, svgNode, svgText, vectorColors } from "../core/svg.js";
+import { renderCurvePlot } from "../core/plotCurve.js";
 import type { BlockRenderer } from "../core/types.js";
 import { evaluateNumericFormula } from "../formula.js";
 import { plotCenter, plotValues } from "../vector.js";
 import { formatNumber } from "../display.js";
 
 export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
+  if (block.curves?.length) return renderCurvePlot(block, context);
+  const points = block.points ?? [];
   const wrap = el("div", `iui-plot ${block.mode}`);
   const unit = block.unit ? ` ${block.unit}` : "";
   const canvas = svgCanvas(400, 240, block.title ?? `${block.mode} plot`);
   const tones = ["primary", "accent", "success", "warn"] as const;
-  const colors = block.points.map((point, index) => vectorColors[point.tone ?? tones[index % tones.length]]);
+  const colors = points.map((point, index) => vectorColors[point.tone ?? tones[index % tones.length]]);
   const format = (value: number) => formatNumber(value, block.precision);
   const readout = el("div", "iui-plot-readout", "Hover or focus a value to inspect it.");
   readout.setAttribute("role", "status");
@@ -18,9 +21,9 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
   let numbers: number[] = [];
   let focused = -1;
   const refresh = () => {
-    targets.forEach((node, index) => node.setAttribute("aria-label", `${block.points[index].label}: ${format(numbers[index])}${unit}`));
+    targets.forEach((node, index) => node.setAttribute("aria-label", `${points[index].label}: ${format(numbers[index])}${unit}`));
     readout.textContent = focused < 0 ? "Hover or focus a value to inspect it."
-      : `${block.points[focused].label}: ${format(numbers[focused])}${unit}`;
+      : `${points[focused].label}: ${format(numbers[focused])}${unit}`;
   };
   const interactive = (node: SVGElement, index: number) => {
     targets[index] = node;
@@ -40,7 +43,7 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
     track.setAttribute("cy", "110");
     track.setAttribute("r", "74");
     canvas.appendChild(track);
-    const rings = block.points.map((_, index) => {
+    const rings = points.map((_, index) => {
       const ring = svgNode("circle", "iui-donut-segment");
       ring.setAttribute("cx", "200");
       ring.setAttribute("cy", "110");
@@ -57,7 +60,7 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
     canvas.append(totalText, totalLabel);
     wrap.appendChild(canvas);
     const legend = el("div", "iui-legend");
-    const values = block.points.map((point, index) => {
+    const values = points.map((point, index) => {
       const item = el("span", "iui-legend-item");
       const swatch = el("span", "iui-swatch");
       swatch.style.background = colors[index];
@@ -68,7 +71,7 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
     });
     wrap.append(legend, readout);
     context.bindings.push({ update: (scope) => {
-      numbers = plotValues(block.points, scope).map((value) => Math.max(0, value));
+      numbers = plotValues(points, scope).map((value) => Math.max(0, value));
       const total = numbers.reduce((sum, value) => sum + value, 0);
       const limit = block.maxFormula ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? total) : block.max ?? total;
       const capacity = Math.max(total, limit, 0.0001);
@@ -103,7 +106,7 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
   const area = svgNode("path", "iui-plot-area");
   const line = svgNode("path", "iui-plot-line");
   canvas.append(area, line);
-  const dots = block.points.map((point, index) => {
+  const dots = points.map((point, index) => {
     const dot = svgNode(block.mode === "bar" ? "rect" : "circle", block.mode === "bar" ? "iui-plot-bar" : "iui-plot-dot");
     if (block.mode === "bar") dot.setAttribute("rx", "3");
     else dot.setAttribute("r", "3.5");
@@ -112,12 +115,12 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
     dot.appendChild(title);
     canvas.appendChild(dot);
     interactive(dot, index);
-    const x = block.mode === "bar" ? left + (index + 0.5) / block.points.length * (right - left)
-      : left + index / Math.max(1, block.points.length - 1) * (right - left);
+    const x = block.mode === "bar" ? left + (index + 0.5) / points.length * (right - left)
+      : left + index / Math.max(1, points.length - 1) * (right - left);
     const label = svgText(x, bottom + 18, point.label, "iui-plot-x-tick");
-    label.setAttribute("text-anchor", index === 0 ? "start" : index === block.points.length - 1 ? "end" : "middle");
+    label.setAttribute("text-anchor", index === 0 ? "start" : index === points.length - 1 ? "end" : "middle");
     // Keep dense series readable without dropping their points or tooltip values.
-    if (index === 0 || index === block.points.length - 1 || index % Math.ceil(block.points.length / 6) === 0) {
+    if (index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 6) === 0) {
       canvas.appendChild(label);
     }
     return { dot, title, x };
@@ -125,7 +128,7 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
   if (block.xLabel) canvas.appendChild(svgText(214, 232, block.xLabel, "iui-plot-axis-label"));
   if (block.yLabel) canvas.appendChild(svgText(left, 12, block.yLabel, "iui-plot-axis-label y"));
   context.bindings.push({ update: (scope) => {
-    const values = plotValues(block.points, scope);
+    const values = plotValues(points, scope);
     numbers = values;
     const upper = block.maxFormula ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? 0) : block.max ?? 0;
     const min = Math.min(0, ...values);
@@ -148,7 +151,7 @@ export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
         dot.setAttribute("cx", String(x));
         dot.setAttribute("cy", String(y(values[index])));
       }
-      title.textContent = `${block.points[index].label}: ${format(values[index])}${unit}`;
+      title.textContent = `${points[index].label}: ${format(values[index])}${unit}`;
     });
     references.forEach((label, index) => { label.textContent = format(min + index / 4 * span); });
     refresh();

@@ -14,6 +14,8 @@ import { renderSvg } from "./svg.js";
 import { renderStats } from "./stats.js";
 import { renderTimeline } from "./timeline.js";
 import { renderCode } from "./code.js";
+import { renderGraph } from "./graph.js";
+import { renderTable } from "./table.js";
 
 const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   choices: renderChoices,
@@ -31,6 +33,8 @@ const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   stats: renderStats,
   timeline: renderTimeline,
   code: renderCode,
+  graph: renderGraph,
+  table: renderTable,
 };
 
 export function renderBlock<K extends BlockKind>(

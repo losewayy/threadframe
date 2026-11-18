@@ -80,6 +80,8 @@ const layerZero = new Set([
   "src/schema/vector.ts", "src/runtime/vector.ts",
   "src/runtime/display.ts",
   "src/schema/content.ts",
+  "src/schema/graph.ts", "src/schema/table.ts",
+  "src/runtime/graphLayout.ts", "src/runtime/curve.ts", "src/runtime/table.ts",
   "src/compile.ts",
 ]);
 const blockLeaves = new Set([
@@ -87,11 +89,13 @@ const blockLeaves = new Set([
   "callout", "grid", "tabs", "accordion",
   "plot", "svg",
   "stats", "timeline", "code",
+  "graph", "table",
 ].map((name) => `${blocks}${name}.ts`));
 const blockImports = new Set([
   `${core}types.ts`, `${core}dom.ts`, `${core}state.ts`, "src/runtime/formula.ts", "src/schema/uiSpec.ts",
   `${core}svg.ts`, "src/runtime/vector.ts",
   "src/runtime/display.ts",
+  "src/runtime/graphLayout.ts", "src/runtime/table.ts", `${core}plotCurve.ts`,
 ]);
 
 function assertLayers(dependencies: ReadonlyMap<string, readonly string[]>): void {
@@ -101,7 +105,10 @@ function assertLayers(dependencies: ReadonlyMap<string, readonly string[]>): voi
         assert.ok(layerZero.has(target) || target.startsWith("external:"),
           `${file} must not import higher layer ${target}`);
       } else if (file.startsWith(core)) {
-        assert.ok(layerZero.has(target) || (file === `${core}state.ts` && ["types.ts", "clipboard.ts"].some((name) => target === `${core}${name}`)),
+        const corePeers = file === `${core}state.ts` ? ["types.ts", "clipboard.ts"]
+          : file === `${core}plotCurve.ts` ? ["dom.ts", "svg.ts", "types.ts"]
+          : [];
+        assert.ok(layerZero.has(target) || corePeers.some((name) => target === `${core}${name}`),
           `${file} must not import ${target}`);
       } else if (file === `${blocks}registry.ts`) {
         assert.ok(blockLeaves.has(target) || target === `${core}types.ts`, `${file} must not import ${target}`);

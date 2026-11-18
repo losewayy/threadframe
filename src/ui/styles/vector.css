@@ -57,6 +57,37 @@
   vector-effect: non-scaling-stroke;
 }
 
+.iui-plot-curve {
+  fill: none;
+  stroke: var(--iui-chart-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.iui-plot-curve.accent {
+  stroke: var(--iui-chart-secondary);
+}
+
+.iui-plot-curve.success {
+  stroke: var(--iui-success);
+}
+
+.iui-plot-curve.warn {
+  stroke: var(--iui-warn);
+}
+
+.iui-plot-curve.dashed {
+  stroke-dasharray: 6 5;
+}
+
+.iui-curve-plot svg:focus-visible {
+  outline: 2px solid var(--iui-accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
 .iui-plot-dot {
   stroke: var(--iui-surface);
   stroke-width: 1.5;

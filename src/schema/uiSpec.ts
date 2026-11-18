@@ -1,8 +1,14 @@
 import { z } from "zod";
-import { PlotBlockSchema, PlotPointSchema, SvgBlockSchema, SvgElementSchema } from "./vector.js";
+import {
+  CurveSeriesSchema, PlotBlockSchema, PlotPointSchema, SvgBlockSchema, SvgElementSchema,
+} from "./vector.js";
 export { PlotBlockSchema, SvgBlockSchema } from "./vector.js";
 import { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema, StatItemSchema, TimelineStepSchema } from "./content.js";
 export { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema } from "./content.js";
+import { GraphBlockSchema, GraphEdgeSchema, GraphNodeSchema } from "./graph.js";
+export { GraphBlockSchema } from "./graph.js";
+import { TableBlockSchema, TableColumnSchema, TableRowSchema } from "./table.js";
+export { TableBlockSchema } from "./table.js";
 
 /**
  * Declarative UI specification schema for ThreadFrame.
@@ -163,6 +169,8 @@ export const LeafBlockSchema = z.discriminatedUnion("kind", [
   StatsBlockSchema,
   TimelineBlockSchema,
   CodeBlockSchema,
+  GraphBlockSchema,
+  TableBlockSchema,
 ]);
 
 // Containers are expanded explicitly so tool JSON Schemas never need recursive refs.
@@ -290,16 +298,26 @@ export interface PartialUiSpecResult {
 function partialBlockChildren(raw: unknown, depth = 0): { value: unknown; pending: boolean } {
   if (!raw || typeof raw !== "object" || depth > 2) return { value: raw, pending: false };
   const block = raw as Record<string, unknown>;
-  const list = block.kind === "plot" ? { field: "points", schema: PlotPointSchema }
-    : block.kind === "svg" ? { field: "elements", schema: SvgElementSchema }
-    : block.kind === "stats" ? { field: "items", schema: StatItemSchema }
-    : block.kind === "timeline" ? { field: "steps", schema: TimelineStepSchema } : null;
-  if (list) {
-    const { field, schema } = list;
-    const children = block[field];
-    if (!Array.isArray(children)) return { value: raw, pending: false };
-    const valid = children.filter((child) => schema.safeParse(child).success);
-    return { value: { ...block, [field]: valid }, pending: valid.length < children.length };
+  const lists: Record<string, Array<[string, z.ZodType]>> = {
+    plot: [["points", PlotPointSchema], ["curves", CurveSeriesSchema]],
+    svg: [["elements", SvgElementSchema]],
+    stats: [["items", StatItemSchema]],
+    timeline: [["steps", TimelineStepSchema]],
+    graph: [["nodes", GraphNodeSchema], ["edges", GraphEdgeSchema]],
+    table: [["columns", TableColumnSchema], ["rows", TableRowSchema]],
+  };
+  const schemas = typeof block.kind === "string" ? lists[block.kind] : undefined;
+  if (schemas) {
+    const value = { ...block };
+    let pending = false;
+    for (const [field, schema] of schemas) {
+      const children = block[field];
+      if (!Array.isArray(children)) continue;
+      const valid = children.filter((child) => schema.safeParse(child).success);
+      if (valid.length < children.length) pending = true;
+      value[field] = valid;
+    }
+    return { value, pending };
   }
   let pending = false;
   const children = (items: unknown) => Array.isArray(items) ? items.map((item) => {

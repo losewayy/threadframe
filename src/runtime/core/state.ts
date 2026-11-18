@@ -56,7 +56,7 @@ export class UiStateStore implements UiState {
     let containerIndex = 0;
     walkBlocks(blocks, (block) => {
       if (block.kind === "tabs" || block.kind === "accordion" || block.kind === "timeline"
-        || block.kind === "architecture") {
+        || block.kind === "architecture" || block.kind === "graph") {
         // Ordinals distinguish anonymous containers while append-only streams keep them stable.
         const key = JSON.stringify([block.kind, block.id ?? containerIndex]);
         containerIndex++;
@@ -74,8 +74,8 @@ export class UiStateStore implements UiState {
             const itemKey = JSON.stringify([key, item.id]);
             if (!this.accordionOpen.has(itemKey)) this.accordionOpen.set(itemKey, Boolean(item.defaultOpen));
           }
-        } else if (block.kind === "architecture" && !this.nodeSelections.has(key)) {
-          const initial = block.layers[0]?.nodes[0];
+        } else if ((block.kind === "architecture" || block.kind === "graph") && !this.nodeSelections.has(key)) {
+          const initial = block.kind === "architecture" ? block.layers[0]?.nodes[0] : block.nodes[0];
           if (initial) this.nodeSelections.set(key, initial.id);
         }
       }

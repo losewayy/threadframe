@@ -7,13 +7,24 @@ export const PlotPointSchema = z.strictObject({
   tone: z.enum(["primary", "accent", "success", "warn"]).optional(),
 });
 
+export const CurveSeriesSchema = z.object({
+  label: z.string(),
+  formula: z.string(),
+  tone: z.enum(["primary", "accent", "success", "warn"]).optional(),
+  dashed: z.boolean().optional(),
+});
+
 export const PlotBlockSchema = z.object({
   kind: z.literal("plot"),
   id: z.string().optional(),
   title: z.string().optional(),
   mode: z.enum(["line", "donut", "bar"]),
   precision: z.number().int().min(0).max(6).optional(),
-  points: z.array(PlotPointSchema).min(1),
+  points: z.array(PlotPointSchema).min(1).optional(),
+  curves: z.array(CurveSeriesSchema).min(1).optional(),
+  xMin: z.number().optional(),
+  xMax: z.number().optional(),
+  samples: z.number().int().min(2).max(400).optional(),
   xLabel: z.string().optional(),
   yLabel: z.string().optional(),
   unit: z.string().optional(),
@@ -21,6 +32,12 @@ export const PlotBlockSchema = z.object({
   maxFormula: z.string().optional(),
   centerLabel: z.string().optional(),
   centerFormula: z.string().optional(),
+}).refine((block) => Boolean(block.points?.length) || Boolean(block.curves?.length), {
+  message: "Plot needs points or curves",
+}).refine((block) => !block.curves || block.mode === "line", {
+  message: "Curves are only supported in line mode",
+}).refine((block) => !block.curves || (block.xMin !== undefined && block.xMax !== undefined && block.xMin < block.xMax), {
+  message: "Curves need xMin < xMax",
 });
 
 const color = z.enum(["primary", "accent", "success", "warn", "muted", "text"]);
@@ -81,6 +98,7 @@ export const SvgBlockSchema = z.strictObject({
 });
 
 export type PlotPoint = z.infer<typeof PlotPointSchema>;
+export type CurveSeries = z.infer<typeof CurveSeriesSchema>;
 export type PlotBlock = z.infer<typeof PlotBlockSchema>;
 export type SvgElement = z.infer<typeof SvgElementSchema>;
 export type SvgTone = z.infer<typeof color>;

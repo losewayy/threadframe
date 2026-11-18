@@ -273,3 +273,229 @@
   line-height: 1.7;
   color: var(--iui-muted);
 }
+
+.iui-table-block {
+  min-width: 0;
+}
+
+.iui-table-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.iui-table-search {
+  flex: 1 1 180px;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid var(--iui-control-border);
+  border-radius: 6px;
+  background: var(--iui-surface);
+  color: var(--iui-text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.iui-status-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.iui-status-pill {
+  padding: 4px 9px;
+  border: 1px solid var(--iui-border);
+  border-radius: 999px;
+  background: var(--iui-surface);
+  color: var(--iui-muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.iui-status-pill[aria-pressed="true"] {
+  border-color: var(--iui-primary);
+  background: var(--iui-primary);
+  color: var(--iui-primary-fg);
+}
+
+.iui-table-scroll {
+  max-height: 320px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.iui-data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 11px;
+}
+
+.iui-data-table th,
+.iui-data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--iui-card-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.iui-data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--iui-surface);
+  color: var(--iui-muted);
+  font-weight: 600;
+}
+
+.iui-data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.iui-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.iui-sort-mark {
+  color: var(--iui-muted);
+  font-size: 9px;
+}
+
+.iui-data-table tr.tone td:first-child {
+  box-shadow: inset 2px 0 0 var(--iui-accent);
+}
+
+.iui-data-table tr.tone.success td:first-child {
+  box-shadow: inset 2px 0 0 var(--iui-success);
+}
+
+.iui-data-table tr.tone.warn td:first-child {
+  box-shadow: inset 2px 0 0 var(--iui-warn);
+}
+
+.iui-data-table tr.tone.primary td:first-child {
+  box-shadow: inset 2px 0 0 var(--iui-primary);
+}
+
+.iui-table-empty {
+  padding: 18px;
+  color: var(--iui-muted);
+  text-align: center !important;
+}
+
+.iui-graph {
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.iui-graph-box {
+  fill: var(--iui-surface);
+  stroke: var(--iui-border);
+  stroke-width: 1;
+  transition: stroke 160ms, fill 160ms;
+}
+
+.iui-graph-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.iui-graph-node:hover .iui-graph-box,
+.iui-graph-node:focus-visible .iui-graph-box {
+  stroke: var(--iui-muted);
+}
+
+.iui-graph-node.selected .iui-graph-box {
+  stroke: var(--iui-accent);
+  stroke-width: 1.6;
+  fill: color-mix(in srgb, var(--iui-accent) 7%, var(--iui-surface));
+}
+
+.iui-graph-node.success.selected .iui-graph-box {
+  stroke: var(--iui-success);
+}
+
+.iui-graph-node.warn.selected .iui-graph-box {
+  stroke: var(--iui-warn);
+}
+
+.iui-graph-label {
+  fill: var(--iui-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.iui-graph-role,
+.iui-graph-value,
+.iui-graph-edge-label {
+  fill: var(--iui-muted);
+  font-size: 10px;
+}
+
+.iui-graph-value {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.iui-graph-edge {
+  stroke: var(--iui-border);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.iui-graph-edge.dashed {
+  stroke-dasharray: 5 4;
+}
+
+.iui-graph-arrow {
+  fill: var(--iui-border);
+}
+
+.iui-graph-edge.active {
+  stroke: var(--iui-accent);
+  stroke-width: 2;
+}
+
+.iui-graph-edge-label {
+  fill: var(--iui-muted);
+  stroke: var(--iui-surface);
+  stroke-width: 3px;
+  paint-order: stroke;
+}
+
+.iui-graph-edge-label.active {
+  fill: var(--iui-accent);
+  stroke: var(--iui-surface);
+}
+
+.iui-graph-arrow.active {
+  fill: var(--iui-accent);
+}
+
+.iui-graph-detail {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--iui-accent);
+  border-radius: 0 6px 6px 0;
+  background: var(--iui-surface-alt);
+  color: var(--iui-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+@media (max-width: 480px) {
+  .iui-data-table th,
+  .iui-data-table td {
+    padding: 7px 8px;
+  }
+}

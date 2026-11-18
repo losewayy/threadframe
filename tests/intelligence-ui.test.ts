@@ -134,7 +134,7 @@ test("partial streams preserve valid blocks while top-level or nested trailing b
     assert.equal(parsed.pendingBlockCount, 1);
     assert.equal(parsed.isComplete, false);
     walkBlocks(parsed.blocks, (block) => {
-      if (block.kind === "plot") assert.equal(block.points.length, 1);
+      if (block.kind === "plot") assert.equal(block.points?.length, 1);
       if (block.kind === "svg") assert.equal(block.elements.length, 1);
       if (block.kind === "stats") assert.equal(block.items.length, 1);
       if (block.kind === "timeline") assert.equal(block.steps.length, 1);
@@ -209,7 +209,7 @@ test("vector fallback resolves control formulas and degrades unfinished expressi
   }
   for (const result of [26, 39, 52]) assert.match(markdown, new RegExp(`\\b${result}\\b`));
   walkBlocks(spec.blocks, (block) => {
-    if (block.kind === "plot") block.points[0].formula = "gain * (";
+    if (block.kind === "plot" && block.points?.length) block.points[0].formula = "gain * (";
     if (block.kind === "svg") {
       for (const element of block.elements) {
         if (element.type === "rect") element.widthFormula = "gain * (";
@@ -455,11 +455,12 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.equal(result.content[0].text, renderFallbackMarkdown(spec));
           const listing = await client.request("tools/list", {});
           const tools = z.array(z.object({ name: z.string(), inputSchema: z.record(z.string(), z.unknown()) })).parse(listing.tools);
-          for (const name of ["render_threadframe", "present_calculator", "present_decision"]) {
+          for (const name of ["render_threadframe", "present_calculator", "present_decision", "present_diagram"]) {
             assert.ok(tools.some((tool) => tool.name === name), `${name} should be registered`);
           }
+          for (const tool of tools) assert.ok(!JSON.stringify(tool.inputSchema).includes('"$ref"'), `${tool.name} schema has $ref`);
           const schema = JSON.stringify(tools.find((tool) => tool.name === "render_threadframe")!.inputSchema);
-          for (const kind of ["controls", "stats", "svg", "timeline", "grid"]) assert.ok(schema.includes(`"const":"${kind}"`));
+          for (const kind of ["controls", "stats", "svg", "timeline", "grid", "graph", "table"]) assert.ok(schema.includes(`"const":"${kind}"`));
           assert.ok(!schema.includes('"$ref"'));
           const examples = await client.request("resources/read", { uri: "threadframe://examples/svg" });
           const resources = z.array(z.object({ text: z.string() })).parse(examples.contents);
@@ -468,6 +469,8 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           const recipes = JSON.parse(z.array(z.object({ text: z.string() })).parse(recipeResult.contents)[0].text);
           const shortcut = resultSchema.parse(await client.request("tools/call", { name: "present_calculator", arguments: recipes.calculator }));
           assert.ok(shortcut.structuredContent);
+          const diagram = resultSchema.parse(await client.request("tools/call", { name: "present_diagram", arguments: recipes.diagram }));
+          assert.ok(diagram.structuredContent?.blocks.some((block) => block.kind === "graph"));
           const rejectedShortcut = resultSchema.parse(await client.request("tools/call", {
             name: "present_calculator",
             arguments: { title: "Bad tuning", inputs: [{ kind: "slider", label: "A", min: 0, max: 1 }], metrics: [{ label: "M", formula: "ghost" }] },

@@ -17,7 +17,7 @@ import { injectStandaloneHtml } from "./src/export.js";
 import { writeEmbedFile } from "./src/embedFile.js";
 import { SVG_EXAMPLES, RECIPES } from "./src/examples.js";
 import { VERSION } from "./src/version.js";
-import { CalculatorInputSchema, DecisionInputSchema, compileCalculator, compileDecision } from "./src/compile.js";
+import { CalculatorInputSchema, DecisionInputSchema, DiagramInputSchema, compileCalculator, compileDecision, compileDiagram } from "./src/compile.js";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const UI_BUNDLE_PATH = path.resolve(THIS_DIR, import.meta.url.endsWith(".ts") ? "dist/mcp-app.html" : "mcp-app.html");
@@ -116,6 +116,22 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
 
   registerAppTool(
     server,
+    "present_diagram",
+    {
+      title: "Present Auto-Laid Diagram",
+      description:
+        'Use when explaining a layered call chain, data flow, pipeline, or dependency topology. Provide nodes and directed edges only; coordinates, box sizes, and arrow paths are computed automatically. Do not hand-calculate SVG coordinates for these cases, and do not use this tool for measured charts (use render_threadframe with plot/chart). Nodes need stable ids (derived from labels when omitted); edges reference ids or labels. Optional inputs declare variables usable by node valueFormula and edge activeFormula to animate paths from sliders or toggles. Cycles are layered safely. Example: {"title":"Request path","nodes":[{"id":"client","label":"Client"},{"id":"api","label":"API","role":"Node"}],"edges":[{"from":"client","to":"api","label":"HTTP"}]}.',
+      inputSchema: DiagramInputSchema,
+      _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
+    },
+    async (input) => {
+      const compiled = compileDiagram(input);
+      return compiled.ok ? respond(compiled.spec) : compileError(compiled.issues);
+    },
+  );
+
+  registerAppTool(
+    server,
     "inspect_preset_frame",
     {
       title: "Inspect Preset ThreadFrame",
@@ -137,7 +153,7 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(SVG_EXAMPLES) }] }));
 
   server.registerResource("Shortcut tool recipes", "threadframe://examples/recipes", {
-    mimeType: "application/json", description: "Minimal copy-paste inputs for present_calculator and present_decision.",
+    mimeType: "application/json", description: "Minimal copy-paste inputs for present_calculator, present_decision, and present_diagram.",
   }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(RECIPES) }] }));
 
   registerAppResource(

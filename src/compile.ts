@@ -70,8 +70,35 @@ export const DecisionInputSchema = z.object({
   })).optional(),
 });
 
+export const DiagramInputSchema = z.object({
+  title: z.string().min(1),
+  subtitle: z.string().optional(),
+  badge: z.string().optional(),
+  direction: z.enum(["LR", "TB"]).optional(),
+  nodes: z.array(z.object({
+    id: IdSchema.optional(),
+    label: z.string().min(1),
+    group: z.string().optional(),
+    role: z.string().optional(),
+    detail: z.string().optional(),
+    tone: ToneSchema.optional(),
+    valueFormula: z.string().optional(),
+    unit: z.string().optional(),
+  })).min(1),
+  edges: z.array(z.object({
+    from: z.string().min(1),
+    to: z.string().min(1),
+    label: z.string().optional(),
+    activeFormula: z.string().optional(),
+    dashed: z.boolean().optional(),
+  })).optional(),
+  inputs: z.array(InputSchema).optional(),
+  caption: z.string().optional(),
+});
+
 export type CalculatorInput = z.infer<typeof CalculatorInputSchema>;
 export type DecisionInput = z.infer<typeof DecisionInputSchema>;
+export type DiagramInput = z.infer<typeof DiagramInputSchema>;
 
 export interface CompileSuccess {
   ok: true;
@@ -315,6 +342,64 @@ export function compileDecision(input: DecisionInput): CompileResult {
       actions: [
         { label: "Apply decision", kind: "send_message", promptTemplate: "Decision: {{state_summary}}" },
         { label: "Copy decision", kind: "copy_state", promptTemplate: "Decision: {{state_summary}}" },
+      ],
+    },
+  };
+}
+
+export function compileDiagram(input: DiagramInput): CompileResult {
+  const issues: string[] = [];
+  const { controls, defaults } = input.inputs?.length
+    ? compileControls(input.inputs, issues)
+    : { controls: [] as ControlItem[], defaults: {} };
+  const known = new Set(Object.keys(defaults));
+  const used = new Set<string>();
+  const nodes = input.nodes.map((node, index) => ({
+    ...node,
+    id: resolveId(node.id, node.label, index, used, issues, "node"),
+  }));
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const aliases = new Map<string, string>();
+  input.nodes.forEach((node, index) => {
+    aliases.set(nodes[index].id, nodes[index].id);
+    aliases.set(node.label, nodes[index].id);
+    if (node.id) aliases.set(node.id, nodes[index].id);
+  });
+  nodes.forEach((node) => {
+    if (node.valueFormula) validateFormula(node.valueFormula, known, `node "${node.label}" valueFormula`, issues);
+  });
+  const edges = (input.edges ?? []).map((edge) => {
+    const from = aliases.get(edge.from);
+    const to = aliases.get(edge.to);
+    if (!from) issues.push(`edge "${edge.from} → ${edge.to}": unknown source; use one of ${[...nodeIds].join(", ")}`);
+    if (!to) issues.push(`edge "${edge.from} → ${edge.to}": unknown target; use one of ${[...nodeIds].join(", ")}`);
+    if (edge.activeFormula) validateFormula(edge.activeFormula, known, `edge "${edge.from} → ${edge.to}" activeFormula`, issues);
+    return { ...edge, from: from ?? edge.from, to: to ?? edge.to };
+  });
+  if (issues.length) return { ok: false, issues };
+
+  const blocks: UiBlock[] = [];
+  if (controls.length) blocks.push({ kind: "controls", controls });
+  blocks.push({
+    kind: "graph",
+    direction: input.direction ?? "LR",
+    nodes,
+    edges: edges.map(({ activeFormula, dashed, label, from, to }) => ({
+      from, to, ...(label ? { label } : {}), ...(activeFormula ? { activeFormula } : {}), ...(dashed ? { dashed } : {}),
+    })),
+    ...(input.caption ? { caption: input.caption } : {}),
+  });
+
+  return {
+    ok: true,
+    spec: {
+      title: input.title,
+      ...(input.subtitle ? { subtitle: input.subtitle } : {}),
+      badge: input.badge ?? "Auto-laid diagram",
+      blocks,
+      actions: [
+        { label: "Send to chat", kind: "send_message", promptTemplate: "Continue from this diagram: {{state_summary}}" },
+        { label: "Copy summary", kind: "copy_state", promptTemplate: "Diagram: {{state_summary}}" },
       ],
     },
   };

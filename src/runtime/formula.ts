@@ -114,7 +114,7 @@ function tokenize(input: string): Token[] {
 type EvalValue = number | string | boolean;
 
 function toNum(v: EvalValue): number {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "number") return v;
   if (typeof v === "boolean") return v ? 1 : 0;
   const parsed = Number(v);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -147,6 +147,7 @@ class Parser {
   constructor(
     private readonly tokens: Token[],
     private readonly scope: VarScope,
+    private readonly strict = false,
   ) {}
 
   private peek(): Token | undefined {
@@ -260,8 +261,8 @@ class Parser {
       const a = toNum(left);
       const b = toNum(right);
       if (op === "*") left = a * b;
-      else if (op === "/") left = b === 0 ? 0 : a / b;
-      else left = b === 0 ? 0 : a % b;
+      else if (op === "/") left = this.strict ? a / b : (b === 0 ? 0 : a / b);
+      else left = this.strict ? a % b : (b === 0 ? 0 : a % b);
     }
     return left;
   }
@@ -361,6 +362,26 @@ export function evaluateFormula(expr: string, scope: VarScope): EvalValue | null
     return new Parser(tokens, scope).parse();
   } catch {
     return null;
+  }
+}
+
+/**
+ * Evaluates one curve sample in strict mode: division by zero yields a non-finite value
+ * instead of the forgiving 0, so sampling can break the curve at undefined points.
+ */
+export function evaluateNumericSample(expr: string, scope: VarScope): number {
+  const trimmed = expr.trim();
+  if (!trimmed) return Number.NaN;
+  try {
+    const tokens = tokenize(trimmed);
+    if (tokens.length === 0) return Number.NaN;
+    const value = new Parser(tokens, scope, true).parse();
+    if (typeof value === "number") return value;
+    if (typeof value === "boolean") return value ? 1 : 0;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
+  } catch {
+    return Number.NaN;
   }
 }
 

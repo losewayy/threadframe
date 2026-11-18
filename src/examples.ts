@@ -1,4 +1,4 @@
-import type { CalculatorInput, DecisionInput } from "./compile.js";
+import type { CalculatorInput, DecisionInput, DiagramInput } from "./compile.js";
 import type { UiSpec } from "./schema/uiSpec.js";
 
 export const SVG_EXAMPLES: Record<string, UiSpec> = {
@@ -36,7 +36,7 @@ export const SVG_EXAMPLES: Record<string, UiSpec> = {
 };
 
 /** Minimal copy-paste recipes for the shortcut tools. */
-export const RECIPES: { calculator: CalculatorInput; decision: DecisionInput } = {
+export const RECIPES: { calculator: CalculatorInput; decision: DecisionInput; diagram: DiagramInput } = {
   calculator: {
     title: "GPU memory and throughput budget",
     subtitle: "Tune quantization, context, and batching before choosing runtime flags.",
@@ -68,6 +68,27 @@ export const RECIPES: { calculator: CalculatorInput; decision: DecisionInput } =
       { label: "Single consumer GPU", values: ["Native", "Heavier base footprint", "CUDA-focused"], winner: 0 },
       { label: "High concurrency", values: ["Basic slot batching", "PagedAttention", "RadixAttention"], winner: 2 },
       { label: "Cross-platform", values: ["CUDA, Metal, Vulkan, CPU", "CUDA / ROCm", "CUDA primary"], winner: 0 },
+    ],
+  },
+  diagram: {
+    title: "Reactive request path",
+    subtitle: "Toggle KV cache compression to highlight the secondary path.",
+    direction: "LR",
+    nodes: [
+      { id: "client", label: "Client", role: "Browser" },
+      { id: "api", label: "API", role: "Node service" },
+      { id: "worker", label: "GPU worker", role: "CUDA", valueFormula: "panel * 4", unit: "ms" },
+      { id: "cache", label: "KV cache", role: "Memory pool" },
+    ],
+    edges: [
+      { from: "client", to: "api", label: "HTTP" },
+      { from: "api", to: "worker", label: "batch" },
+      { from: "worker", to: "cache", label: "paged" },
+      { from: "cache", to: "api", label: "reuse", dashed: true, activeFormula: "compress" },
+    ],
+    inputs: [
+      { kind: "toggle", id: "compress", label: "KV cache compression", defaultValue: false },
+      { kind: "slider", id: "panel", label: "Batch panel", min: 1, max: 16, defaultValue: 4, unit: "ms" },
     ],
   },
 };
