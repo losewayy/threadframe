@@ -122,7 +122,7 @@ test("graph, table, and curve blocks degrade to Markdown and tolerate partial st
     title: "Visual contracts",
     blocks: [
       { kind: "controls", controls: [{ kind: "slider", id: "gain", label: "Gain", min: 0, max: 10, defaultValue: 2 }] },
-      { kind: "plot", mode: "line", xMin: 0, xMax: 4, curves: [{ label: "Linear", formula: "x * gain" }] },
+      { kind: "plot", mode: "line", xMin: 0, xMax: 4, xVariable: "t", curves: [{ label: "Linear", formula: "t * gain" }] },
       { kind: "graph", nodes: [{ id: "a", label: "Alpha", role: "Source" }, { id: "b", label: "Beta" }], edges: [{ from: "a", to: "b", label: "call" }] },
       { kind: "table", columns: [
         { key: "name", label: "Name" },
@@ -132,6 +132,8 @@ test("graph, table, and curve blocks degrade to Markdown and tolerate partial st
   });
   const markdown = renderFallbackMarkdown(spec);
   for (const text of ["Linear", "Alpha", "Beta", "call", "Name", "Score", "20"]) assert.ok(markdown.includes(text), `missing ${text}`);
+  assert.match(markdown, /\|\s*Point\s*\|\s*t\s*\|/);
+  assert.ok(!/\|\s*Point\s*\|\s*x\s*\|/.test(markdown));
 
   const graphStream = parsePartialUiSpec({ title: "Graph", blocks: [
     { kind: "graph", nodes: [{ id: "a", label: "A" }], edges: [{ from: "a", to: "b" }, {}] },

@@ -19,6 +19,7 @@ import { SVG_EXAMPLES, RECIPES } from "./src/examples.js";
 import { VERSION } from "./src/version.js";
 import { CalculatorInputSchema, DecisionInputSchema, DiagramInputSchema, compileCalculator, compileDecision, compileDiagram } from "./src/compile.js";
 import { SnapshotSchema, readSnapshot, writeSnapshot } from "./src/snapshot.js";
+import { resolveSafeFilePath } from "./src/pathSafety.js";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const UI_BUNDLE_PATH = path.resolve(THIS_DIR, import.meta.url.endsWith(".ts") ? "dist/mcp-app.html" : "mcp-app.html");
@@ -48,8 +49,25 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     if (issues.length) {
       return { isError: true, content: [{ type: "text" as const, text: `Invalid ThreadFrame spec:\n- ${issues.join("\n- ")}` }] };
     }
-    const markdown = renderFallbackMarkdown(spec);
     const mode = detectClientAdapter(server.server.getClientVersion(), server.server.getClientCapabilities(), process.env.THREADFRAME_HOST);
+    const snapshotActions = (spec.actions ?? []).filter((action) => action.kind === "save_state" || action.statePath !== undefined);
+    if (snapshotActions.length) {
+      for (const action of snapshotActions) {
+        try {
+          if (!action.statePath) throw new Error("save_state actions need a statePath");
+          resolveSafeFilePath(action.statePath, ".json");
+        } catch (error) {
+          return { isError: true, content: [{ type: "text" as const, text: `Invalid statePath: ${(error as Error).message}` }] };
+        }
+      }
+      if (!options.localStdio || mode !== "mcp-apps") {
+        return {
+          isError: true,
+          content: [{ type: "text" as const, text: "statePath is only supported for MCP Apps clients over local --stdio. Omit statePath for Antigravity/embedded or Markdown clients, which fall back to copying the summary." }],
+        };
+      }
+    }
+    const markdown = renderFallbackMarkdown(spec);
     if (mode === "mcp-apps") return { content: [{ type: "text" as const, text: markdown }], structuredContent: spec };
     let hint = `Client mode: ${mode}. Markdown fallback returned.`;
     if (embedPath !== undefined) {
@@ -76,7 +94,7 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     {
       title: "Render Custom ThreadFrame",
       description:
-        'Render a fully custom interactive card with the low-level UiSpec schema. Prefer present_calculator for parameter tuning, present_decision for picking among 2-4 options, and present_diagram for node/edge flows; use this tool only when the compact tools cannot express the layout. Blocks: choices, controls, stats, chart, plot, svg, compare, checklist, timeline, architecture, callout, code; containers: grid holds leaves, tabs/accordion hold leaves or one grid. Control ids define variables; formulas support arithmetic, comparisons, ternary and min/max/abs/floor/ceil/round/clamp/if; code uses {{var}}. Keep cards compact: fold secondary detail into tabs or a collapsed accordion, target roughly 450px and stay under about 800px. Never supply executable HTML or JavaScript. Minimal linked example: {"title":"Size","blocks":[{"kind":"controls","controls":[{"kind":"slider","id":"x","label":"Size","min":1,"max":10,"defaultValue":3}]},{"kind":"stats","items":[{"label":"Size","formula":"x"}]},{"kind":"svg","width":120,"height":30,"elements":[{"type":"rect","x":0,"y":0,"widthFormula":"x * 10","height":20,"fill":"primary"}]}]}. Read threadframe://examples/svg or threadframe://examples/recipes for more.',
+        'Render a fully custom interactive card with the low-level UiSpec schema. Prefer present_calculator for parameter tuning, present_decision for picking among 2-4 options, and present_diagram for node/edge flows; use this tool only when the compact tools cannot express the layout. Blocks: choices, controls, stats, chart, plot, svg, compare, checklist, timeline, architecture, graph, table, callout, code; containers: grid holds leaves, tabs/accordion hold leaves or one grid. plot accepts discrete points, or parameterized curves in line mode: curves (label + formula), xMin/xMax, optional xVariable (default x) and samples; undefined or non-finite samples break the line into segments. graph auto-lays nodes/edges without manual coordinates, and table supports sortable columns plus keyword/status filtering. Control ids define variables; formulas support arithmetic, comparisons, ternary and min/max/abs/floor/ceil/round/clamp/if; code uses {{var}}. Keep cards compact: fold secondary detail into tabs or a collapsed accordion, target roughly 450px and stay under about 800px. Never supply executable HTML or JavaScript. Minimal linked example: {"title":"Size","blocks":[{"kind":"controls","controls":[{"kind":"slider","id":"x","label":"Size","min":1,"max":10,"defaultValue":3}]},{"kind":"stats","items":[{"label":"Size","formula":"x"}]},{"kind":"svg","width":120,"height":30,"elements":[{"type":"rect","x":0,"y":0,"widthFormula":"x * 10","height":20,"fill":"primary"}]}]}. Read threadframe://examples/svg or threadframe://examples/recipes for more.',
       inputSchema: UiSpecSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
@@ -90,12 +108,12 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
       title: "Present Tunable Calculator",
       description:
         'Use when the answer depends on trade-offs the user should tune: sizing, budgets, memory, throughput, cost, quotas, or configuration parameters. Renders sliders, toggles, and selects with live metrics and a copyable template inside chat. Do not call for factual Q&A, a single command output, or cases with no adjustable parameter. Keep it compact: a few inputs and one or two metrics are ideal; large sets fold into tabs automatically. Inputs are flat: id is optional (a stable id is derived from the label), slider defaults to min 0 max 100 step 1, select requires options, metrics and bars use formulas over input ids, and template placeholders use {{id}}. Provide at least one metric or bar. Example: {"title":"GPU memory budget","inputs":[{"kind":"select","id":"quant","label":"Quantization","options":["Q4_K","FP16"],"defaultValue":"Q4_K"},{"kind":"slider","id":"ctx","label":"Context","min":2,"max":64,"defaultValue":16}],"metrics":[{"label":"VRAM","formula":"quant == \'FP16\' ? 15.2 : 4.6 + ctx * 0.05","unit":"GB"}]}. Pass statePath only in local --stdio mode to add an Apply & remember snapshot action.',
-      inputSchema: CalculatorInputSchema,
+      inputSchema: CalculatorInputSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
-    async (input) => {
+    async ({ embedPath, ...input }) => {
       const compiled = compileCalculator(input);
-      return compiled.ok ? respond(compiled.spec) : compileError(compiled.issues);
+      return compiled.ok ? respond(compiled.spec, embedPath) : compileError(compiled.issues);
     },
   );
 
@@ -106,12 +124,12 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
       title: "Present Decision Card",
       description:
         'Use when the user must choose between 2-4 concrete options (libraries, architectures, rollout plans) and you can state the trade-offs. Builds a comparison matrix plus selectable decision cards with an apply action. Do not call when one option is clearly correct or no decision is needed. criteria values are ordered exactly like options; winner is a 0-based option index; mark at most one option recommended. Option prompts fire an immediate follow-up message when clicked. Example: {"title":"Choose a serving stack","options":[{"label":"llama.cpp","recommended":true},{"label":"vLLM"},{"label":"SGLang"}],"criteria":[{"label":"Single GPU","values":["Native","Heavy","CUDA-focused"],"winner":0}]}. Pass statePath only in local --stdio mode to add a Record decision snapshot action.',
-      inputSchema: DecisionInputSchema,
+      inputSchema: DecisionInputSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
-    async (input) => {
+    async ({ embedPath, ...input }) => {
       const compiled = compileDecision(input);
-      return compiled.ok ? respond(compiled.spec) : compileError(compiled.issues);
+      return compiled.ok ? respond(compiled.spec, embedPath) : compileError(compiled.issues);
     },
   );
 
@@ -122,12 +140,12 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
       title: "Present Auto-Laid Diagram",
       description:
         'Use when explaining a layered call chain, data flow, pipeline, or dependency topology. Provide nodes and directed edges only; coordinates, box sizes, and arrow paths are computed automatically. Do not hand-calculate SVG coordinates for these cases, and do not use this tool for measured charts (use render_threadframe with plot/chart). Nodes need stable ids (derived from labels when omitted); edges reference ids or labels. Optional inputs declare variables usable by node valueFormula and edge activeFormula to animate paths from sliders or toggles. Cycles are layered safely. Example: {"title":"Request path","nodes":[{"id":"client","label":"Client"},{"id":"api","label":"API","role":"Node"}],"edges":[{"from":"client","to":"api","label":"HTTP"}]}. Pass statePath only in local --stdio mode to add a Remember diagram snapshot action.',
-      inputSchema: DiagramInputSchema,
+      inputSchema: DiagramInputSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
-    async (input) => {
+    async ({ embedPath, ...input }) => {
       const compiled = compileDiagram(input);
-      return compiled.ok ? respond(compiled.spec) : compileError(compiled.issues);
+      return compiled.ok ? respond(compiled.spec, embedPath) : compileError(compiled.issues);
     },
   );
 
@@ -158,8 +176,9 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
       inputSchema: z.object({ statePath: z.string(), snapshot: SnapshotSchema }),
     },
     async ({ statePath, snapshot }) => {
-      if (!options.localStdio) {
-        return { isError: true, content: [{ type: "text" as const, text: "State snapshots are only allowed in local --stdio mode, never over HTTP" }] };
+      const mode = detectClientAdapter(server.server.getClientVersion(), server.server.getClientCapabilities(), process.env.THREADFRAME_HOST);
+      if (!options.localStdio || mode !== "mcp-apps") {
+        return { isError: true, content: [{ type: "text" as const, text: "State snapshots are only allowed for MCP Apps clients over local --stdio, never over HTTP or from embedded/terminal clients" }] };
       }
       try {
         return { content: [{ type: "text" as const, text: `Snapshot saved: ${await writeSnapshot(statePath, snapshot)}` }] };

@@ -446,7 +446,7 @@ test("state snapshot tools stay local and are disabled over HTTP", async () => {
   };
   const resultSchema = z.object({ content: z.array(z.object({ type: z.literal("text"), text: z.string() })), isError: z.boolean().optional() });
   try {
-    const local = await connectTestClient("Local", {}, true);
+    const local = await connectTestClient("Local", appsCapabilities, true);
     try {
       const file = path.join(directory, "state.json");
       const saved = resultSchema.parse(await local.request("tools/call", { name: "save_threadframe_state", arguments: { statePath: file, snapshot } }));
@@ -482,6 +482,11 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "threadframe-"));
   const spec = UiSpecSchema.parse({ title: "Adapter contract", blocks: [{ kind: "callout", body: "Local export" }] });
   const resultSchema = z.object({ content: z.array(z.object({ type: z.literal("text"), text: z.string() })), isError: z.boolean().optional(), structuredContent: UiSpecSchema.optional() });
+  const shortcuts = [
+    { name: "present_calculator", arguments: { title: "Shortcut calculator", inputs: [{ kind: "slider", label: "A", min: 0, max: 10 }], metrics: [{ label: "Double", formula: "a * 2" }] } },
+    { name: "present_decision", arguments: { title: "Shortcut decision", options: [{ label: "One" }, { label: "Two" }] } },
+    { name: "present_diagram", arguments: { title: "Shortcut diagram", nodes: [{ id: "a", label: "A" }, { id: "b", label: "B" }], edges: [{ from: "a", to: "b" }] } },
+  ];
   try {
     for (const scenario of [
       { name: "Native", capabilities: appsCapabilities, local: true, written: false },
@@ -502,6 +507,10 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
             assert.ok(tools.some((tool) => tool.name === name), `${name} should be registered`);
           }
           for (const tool of tools) assert.ok(!JSON.stringify(tool.inputSchema).includes('"$ref"'), `${tool.name} schema has $ref`);
+          for (const name of ["present_calculator", "present_decision", "present_diagram"]) {
+            const shortcutTool = tools.find((tool) => tool.name === name)!;
+            assert.ok(JSON.stringify(shortcutTool.inputSchema).includes('"embedPath"'), `${name} should accept embedPath`);
+          }
           const schema = JSON.stringify(tools.find((tool) => tool.name === "render_threadframe")!.inputSchema);
           for (const kind of ["controls", "stats", "svg", "timeline", "grid", "graph", "table"]) assert.ok(schema.includes(`"const":"${kind}"`));
           assert.ok(!schema.includes('"$ref"'));
@@ -514,6 +523,17 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.ok(shortcut.structuredContent);
           const diagram = resultSchema.parse(await client.request("tools/call", { name: "present_diagram", arguments: recipes.diagram }));
           assert.ok(diagram.structuredContent?.blocks.some((block) => block.kind === "graph"));
+          const nativeStatePath = path.join(directory, "native-state.json");
+          const withState = resultSchema.parse(await client.request("tools/call", {
+            name: "present_calculator", arguments: { ...shortcuts[0].arguments, statePath: nativeStatePath },
+          }));
+          assert.equal(withState.isError, undefined);
+          assert.equal(withState.structuredContent?.actions?.[0]?.kind, "save_state");
+          const badState = resultSchema.parse(await client.request("tools/call", {
+            name: "present_calculator", arguments: { ...shortcuts[0].arguments, statePath: path.join(directory, "NUL.json") },
+          }));
+          assert.equal(badState.isError, true);
+          assert.match(badState.content[0].text, /Invalid statePath/);
           const rejectedShortcut = resultSchema.parse(await client.request("tools/call", {
             name: "present_calculator",
             arguments: { title: "Bad tuning", inputs: [{ kind: "slider", label: "A", min: 0, max: 1 }], metrics: [{ label: "M", formula: "ghost" }] },
@@ -538,7 +558,40 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.ok(result.content[0].text.includes("local --stdio"));
         }
         if (!scenario.written) await assert.rejects(fs.access(embedPath));
+        if (scenario.name === "HTTP") {
+          const httpState = resultSchema.parse(await client.request("tools/call", {
+            name: "present_calculator", arguments: { ...shortcuts[0].arguments, statePath: path.join(directory, "http-state.json") },
+          }));
+          assert.equal(httpState.isError, true);
+          assert.match(httpState.content[0].text, /MCP Apps clients over local --stdio/);
+        }
         if (scenario.name === "Antigravity") {
+          for (const shortcut of shortcuts) {
+            const file = path.join(directory, `${shortcut.name}.html`);
+            const written = resultSchema.parse(await client.request("tools/call", {
+              name: shortcut.name, arguments: { ...shortcut.arguments, embedPath: file },
+            }));
+            assert.equal(written.isError, undefined, shortcut.name);
+            assert.ok(written.content[0].text.includes("file:///"), shortcut.name);
+            assert.ok((await fs.readFile(file, "utf8")).includes("__THREADFRAME_SPEC__"), shortcut.name);
+          }
+          const stateRejected = resultSchema.parse(await client.request("tools/call", {
+            name: "present_calculator", arguments: { ...shortcuts[0].arguments, embedPath: path.join(directory, "state-rejected.html"), statePath: path.join(directory, "state.json") },
+          }));
+          assert.equal(stateRejected.isError, true);
+          assert.match(stateRejected.content[0].text, /MCP Apps clients over local --stdio/);
+          const directSave = resultSchema.parse(await client.request("tools/call", {
+            name: "save_threadframe_state",
+            arguments: {
+              statePath: path.join(directory, "direct-state.json"),
+              snapshot: {
+                title: "Direct", savedAt: "2026-11-19T00:00:00.000Z", variables: [], choices: [],
+                checklist: { done: 0, total: 0, items: [] },
+              },
+            },
+          }));
+          assert.equal(directSave.isError, true);
+          assert.match(directSave.content[0].text, /MCP Apps clients over local --stdio/);
           for (const target of ["bad.json", "NUL.html", "CON/file.html", "device.html:stream", "\\\\.\\device.html"]) {
             const rejected = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_frame", arguments: { preset: "agent-launch-kit", embedPath: target.startsWith("\\\\") ? target : path.join(directory, target) } }));
             assert.equal(rejected.isError, true, target);

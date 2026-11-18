@@ -46,6 +46,7 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
     }
     case "plot": {
       if (block.curves?.length) {
+        const variable = block.xVariable ?? "x";
         for (const curve of block.curves) {
           const samples = sampleCurve(curve.formula, block.xMin ?? 0, block.xMax ?? 1, block.samples, scope, block.xVariable);
           const summary = curveSummary(samples);
@@ -54,7 +55,7 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
             lines.push(`- ${curve.label}: no finite sample between ${block.xMin} and ${block.xMax}`);
             continue;
           }
-          lines.push(`  | Point | x | ${curve.label} |`, "  | --- | --- | --- |");
+          lines.push(`  | Point | ${variable} | ${curve.label} |`, "  | --- | --- | --- |");
           for (const point of summary) {
             lines.push(`  | ${point.label} | ${formatNumber(point.x, block.precision)} | ${formatNumber(point.y, block.precision)}${block.unit ? ` ${block.unit}` : ""} |`);
           }
