@@ -1,8 +1,9 @@
 import { walkBlocks, type UiBlock } from "../../schema/uiSpec.js";
 import type { VarScope } from "../formula.js";
+import { buildIntentSummary, buildSnapshot, type ControlMeta, type ThreadFrameSnapshot } from "../summary.js";
 import { copyText } from "./clipboard.js";
 import type {
-  BlockRenderContext, ControlSyncCallback, ReactiveBinding, RendererHostBridge, UiState,
+  BlockRenderContext, ControlSyncCallback, ReactiveBinding, RendererHostBridge, UiActionRequest, UiState,
 } from "./types.js";
 
 export class UiStateStore implements UiState {
@@ -13,6 +14,10 @@ export class UiStateStore implements UiState {
   readonly accordionOpen = new Map<string, boolean>();
   readonly timelineSelections = new Map<string, string>();
   readonly nodeSelections = new Map<string, string>();
+  readonly controlMeta = new Map<string, ControlMeta>();
+  readonly choiceLabels = new Map<string, string>();
+  readonly checklistLabels = new Map<string, string>();
+  specTitle = "";
   private readonly containerKeys = new WeakMap<UiBlock, string>();
   private reactiveBindings: ReactiveBinding[] = [];
   private controlSyncCallbacks: ControlSyncCallback[] = [];
@@ -84,12 +89,24 @@ export class UiStateStore implements UiState {
           if (!(ctrl.id in this.scope)) {
             this.scope[ctrl.id] = ctrl.defaultValue;
           }
+          if (!this.controlMeta.has(ctrl.id)) {
+            this.controlMeta.set(ctrl.id, {
+              label: ctrl.label,
+              defaultValue: ctrl.defaultValue,
+              ...(ctrl.kind === "slider" && ctrl.unit ? { unit: ctrl.unit } : {}),
+            });
+          }
         }
       } else if (block.kind === "checklist") {
         for (const item of block.items) {
           if (!this.checklistState.has(item.id)) {
             this.checklistState.set(item.id, Boolean(item.checked));
           }
+          if (!this.checklistLabels.has(item.id)) this.checklistLabels.set(item.id, item.label);
+        }
+      } else if (block.kind === "choices") {
+        for (const option of block.options) {
+          if (!this.choiceLabels.has(option.id)) this.choiceLabels.set(option.id, option.label);
         }
       }
     });
@@ -105,30 +122,45 @@ export class UiStateStore implements UiState {
   }
 
   summarize(): string {
-    const parts: string[] = [];
-    for (const [k, v] of Object.entries(this.scope)) {
-      parts.push(`${k}=${String(v)}`);
-    }
-    if (this.checklistState.size > 0) {
-      let done = 0;
-      for (const val of this.checklistState.values()) {
-        if (val) done++;
-      }
-      parts.push(`checklist=${done}/${this.checklistState.size}`);
-    }
-    if (this.selectedChoiceIds.size > 0) {
-      parts.push(`choices=${Array.from(this.selectedChoiceIds).join(",")}`);
-    }
-    return parts.join(", ");
+    return buildIntentSummary({
+      scope: this.scope,
+      controlMeta: this.controlMeta,
+      selectedChoices: this.selectedChoiceIds,
+      choiceLabels: this.choiceLabels,
+      checklistState: this.checklistState,
+      checklistLabels: this.checklistLabels,
+    });
   }
 
-  async dispatchAction(label: string, template?: string, kind?: "send_message" | "copy_state"): Promise<void> {
-    const summary = this.summarize();
-    const message = template
-      ? template.replace("{{state_summary}}", summary)
-      : `${label}: ${summary}`;
+  snapshot(): ThreadFrameSnapshot {
+    return buildSnapshot({
+      title: this.specTitle,
+      scope: this.scope,
+      controlMeta: this.controlMeta,
+      selectedChoices: this.selectedChoiceIds,
+      choiceLabels: this.choiceLabels,
+      checklistState: this.checklistState,
+      checklistLabels: this.checklistLabels,
+    });
+  }
 
-    if (kind !== "copy_state" && this.bridge.sendMessage) {
+  async dispatchAction(action: UiActionRequest): Promise<void> {
+    const summary = this.summarize();
+    const message = action.promptTemplate
+      ? action.promptTemplate.replace("{{state_summary}}", summary)
+      : `${action.label}: ${summary}`;
+
+    if (action.kind === "save_state" && action.statePath && this.bridge.saveState) {
+      try {
+        await this.bridge.saveState(this.snapshot(), action.statePath);
+        this.setStatus("Saved snapshot for the next turn");
+        return;
+      } catch (error) {
+        this.setStatus(`Snapshot failed: ${(error as Error).message}`);
+      }
+    }
+
+    if (action.kind !== "copy_state" && this.bridge.sendMessage) {
       try {
         await this.bridge.sendMessage(message);
         this.setStatus("Sent to agent chat");

@@ -42,6 +42,7 @@ export class ThreadFrameRenderer {
   }
 
   private renderParsed(parsed: PartialUiSpecResult, streaming: boolean): void {
+    this.state.specTitle = parsed.title;
     this.state.initDefaults(parsed.blocks);
     if (!this.shell) {
       this.shell = el("div", "iui-shell");
@@ -145,7 +146,7 @@ export class ThreadFrameRenderer {
     for (const action of parsed.actions) {
       const button = el("button", "iui-action-btn", action.label);
       button.type = "button";
-      button.addEventListener("click", () => this.state.dispatchAction(action.label, action.promptTemplate, action.kind));
+      button.addEventListener("click", () => this.state.dispatchAction(action));
       buttons.appendChild(button);
     }
     footer.appendChild(buttons);

@@ -306,17 +306,17 @@ test("actions route copy_state to the clipboard and send_message to the host wit
   const state = new UiStateStore({ sendMessage: (text) => { sent.push(text); } },
     (text) => statuses.push(text), clipboard);
   state.scope.workers = 4;
-  await state.dispatchAction("Copy", "Plan: {{state_summary}}", "copy_state");
-  assert.deepEqual(copied, ["Plan: workers=4"]);
+  await state.dispatchAction({ label: "Copy", promptTemplate: "Plan: {{state_summary}}", kind: "copy_state" });
+  assert.deepEqual(copied, ["Plan: Changed: workers: 4"]);
   assert.equal(sent.length, 0);
-  await state.dispatchAction("Send", "Plan: {{state_summary}}", "send_message");
-  assert.deepEqual(sent, ["Plan: workers=4"]);
+  await state.dispatchAction({ label: "Send", promptTemplate: "Plan: {{state_summary}}", kind: "send_message" });
+  assert.deepEqual(sent, ["Plan: Changed: workers: 4"]);
   assert.equal(copied.length, 1);
   const offline = new UiStateStore({}, (text) => statuses.push(text), clipboard);
-  await offline.dispatchAction("Apply", "Offline plan", "send_message");
+  await offline.dispatchAction({ label: "Apply", promptTemplate: "Offline plan", kind: "send_message" });
   assert.equal(copied.at(-1), "Offline plan");
   const unavailable = new UiStateStore({}, (text) => statuses.push(text), async () => false);
-  await unavailable.dispatchAction("Copy", "Manual plan", "copy_state");
+  await unavailable.dispatchAction({ label: "Copy", promptTemplate: "Manual plan", kind: "copy_state" });
   assert.match(statuses.at(-1)!, /Copy unavailable/);
   assert.ok(statuses.at(-1)!.includes("Manual plan"));
 });
@@ -435,6 +435,49 @@ async function connectTestClient(name: string, capabilities: ClientCapabilities,
   return { request, close: () => server.close() };
 }
 
+test("state snapshot tools stay local and are disabled over HTTP", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "threadframe-state-"));
+  const snapshot = {
+    title: "Session",
+    savedAt: "2026-11-19T00:00:00.000Z",
+    variables: [{ id: "workers", label: "GPU count", value: 4, changed: true }],
+    choices: ["Fast profile"],
+    checklist: { done: 1, total: 2, items: [{ label: "Check budget", checked: true }, { label: "Verify host", checked: false }] },
+  };
+  const resultSchema = z.object({ content: z.array(z.object({ type: z.literal("text"), text: z.string() })), isError: z.boolean().optional() });
+  try {
+    const local = await connectTestClient("Local", {}, true);
+    try {
+      const file = path.join(directory, "state.json");
+      const saved = resultSchema.parse(await local.request("tools/call", { name: "save_threadframe_state", arguments: { statePath: file, snapshot } }));
+      assert.equal(saved.isError, undefined);
+      const read = resultSchema.parse(await local.request("tools/call", { name: "read_threadframe_state", arguments: { statePath: file } }));
+      assert.match(read.content[0].text, /"title": "Session"/);
+      const missing = resultSchema.parse(await local.request("tools/call", { name: "read_threadframe_state", arguments: { statePath: path.join(directory, "missing.json") } }));
+      assert.equal(missing.isError, true);
+    } finally {
+      await local.close();
+    }
+    const http = await connectTestClient("HTTP", {}, false);
+    try {
+      const saved = resultSchema.parse(await http.request("tools/call", {
+        name: "save_threadframe_state", arguments: { statePath: path.join(directory, "http.json"), snapshot },
+      }));
+      assert.equal(saved.isError, true);
+      assert.match(saved.content[0].text, /local --stdio/);
+      const read = resultSchema.parse(await http.request("tools/call", {
+        name: "read_threadframe_state", arguments: { statePath: path.join(directory, "state.json") },
+      }));
+      assert.equal(read.isError, true);
+      assert.match(read.content[0].text, /local --stdio/);
+    } finally {
+      await http.close();
+    }
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("real MCP sessions preserve native results and restrict embed writes to explicit local exports", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "threadframe-"));
   const spec = UiSpecSchema.parse({ title: "Adapter contract", blocks: [{ kind: "callout", body: "Local export" }] });
@@ -455,7 +498,7 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.equal(result.content[0].text, renderFallbackMarkdown(spec));
           const listing = await client.request("tools/list", {});
           const tools = z.array(z.object({ name: z.string(), inputSchema: z.record(z.string(), z.unknown()) })).parse(listing.tools);
-          for (const name of ["render_threadframe", "present_calculator", "present_decision", "present_diagram"]) {
+          for (const name of ["render_threadframe", "present_calculator", "present_decision", "present_diagram", "save_threadframe_state", "read_threadframe_state"]) {
             assert.ok(tools.some((tool) => tool.name === name), `${name} should be registered`);
           }
           for (const tool of tools) assert.ok(!JSON.stringify(tool.inputSchema).includes('"$ref"'), `${tool.name} schema has $ref`);

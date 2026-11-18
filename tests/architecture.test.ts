@@ -82,6 +82,7 @@ const layerZero = new Set([
   "src/schema/content.ts",
   "src/schema/graph.ts", "src/schema/table.ts",
   "src/runtime/graphLayout.ts", "src/runtime/curve.ts", "src/runtime/table.ts",
+  "src/runtime/summary.ts",
   "src/compile.ts",
 ]);
 const blockLeaves = new Set([

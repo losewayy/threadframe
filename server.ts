@@ -18,6 +18,7 @@ import { writeEmbedFile } from "./src/embedFile.js";
 import { SVG_EXAMPLES, RECIPES } from "./src/examples.js";
 import { VERSION } from "./src/version.js";
 import { CalculatorInputSchema, DecisionInputSchema, DiagramInputSchema, compileCalculator, compileDecision, compileDiagram } from "./src/compile.js";
+import { SnapshotSchema, readSnapshot, writeSnapshot } from "./src/snapshot.js";
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const UI_BUNDLE_PATH = path.resolve(THIS_DIR, import.meta.url.endsWith(".ts") ? "dist/mcp-app.html" : "mcp-app.html");
@@ -146,6 +147,47 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
     async ({ preset, embedPath }) => respond(PRESETS[preset], embedPath),
+  );
+
+  server.registerTool(
+    "save_threadframe_state",
+    {
+      title: "Save ThreadFrame State",
+      description:
+        "Write a compact snapshot for the next turn. Called by the ThreadFrame UI's explicit Apply & remember action. Available only in local --stdio mode; disabled over HTTP. statePath must be an explicit local .json path without device names, ADS, UNC paths, or symlink components.",
+      inputSchema: z.object({ statePath: z.string(), snapshot: SnapshotSchema }),
+    },
+    async ({ statePath, snapshot }) => {
+      if (!options.localStdio) {
+        return { isError: true, content: [{ type: "text" as const, text: "State snapshots are only allowed in local --stdio mode, never over HTTP" }] };
+      }
+      try {
+        return { content: [{ type: "text" as const, text: `Snapshot saved: ${await writeSnapshot(statePath, snapshot)}` }] };
+      } catch (error) {
+        return { isError: true, content: [{ type: "text" as const, text: `Snapshot write failed: ${(error as Error).message}` }] };
+      }
+    },
+  );
+
+  server.registerTool(
+    "read_threadframe_state",
+    {
+      title: "Read ThreadFrame State",
+      description:
+        "Read the latest confirmed ThreadFrame snapshot from an explicitly chosen .json path. Read-only and available only in local --stdio mode; disabled over HTTP.",
+      inputSchema: z.object({ statePath: z.string() }),
+    },
+    async ({ statePath }) => {
+      if (!options.localStdio) {
+        return { isError: true, content: [{ type: "text" as const, text: "State snapshots can only be read in local --stdio mode, never over HTTP" }] };
+      }
+      try {
+        const snapshot = await readSnapshot(statePath);
+        return { content: [{ type: "text" as const, text: JSON.stringify(snapshot, null, 2) }] };
+      } catch (error) {
+        return { isError: true, content: [{ type: "text" as const, text: `Snapshot read failed: ${(error as Error).message}` }] };
+      }
+    },
   );
 
   server.registerResource("Safe SVG examples", "threadframe://examples/svg", {

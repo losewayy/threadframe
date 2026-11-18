@@ -45,6 +45,11 @@ test("calculator compiles compact inputs into a valid UiSpec and rejects undecla
     assert.equal(failed.ok, false);
     assert.match(failed.ok ? "" : failed.issues.join("\n"), message);
   }
+
+  const withSnapshot = compileCalculator(calculator({ statePath: "session/state.json" }));
+  assert.ok(withSnapshot.ok);
+  assert.equal(withSnapshot.spec.actions?.[0].kind, "save_state");
+  assert.equal(withSnapshot.spec.actions?.[0].statePath, "session/state.json");
 });
 
 test("calculator derives stable unique ids and rejects out-of-range defaults", () => {

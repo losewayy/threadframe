@@ -64,15 +64,16 @@ ThreadFrame inspects each client's advertised MCP capabilities during handshake 
 - **Embedded HTML hosts** (such as Antigravity, or when `THREADFRAME_HOST=antigravity` is set on non-UI hosts): supports passing `embedPath` in local `--stdio` mode to write a compact, transparent `--embed` HTML artifact directly to disk without bloating model context.
 - **Terminal / text-only clients**: returns clean structured Markdown tables, bullet summaries, and interpolated code fences automatically.
 
-## Component Catalog (15 Kinds)
+## Component Catalog (17 Kinds)
 
-There are **12 leaf blocks** and **3 layout containers**:
+There are **14 leaf blocks** and **3 layout containers**:
 
 | Category | Kinds | Purpose |
 | --- | --- | --- |
 | Decisions & inputs | `choices`, `controls` | Decision cards (`setVars` or immediate prompts); sliders, toggles, and segmented selectors. |
-| Metrics & charts | `stats`, `chart`, `plot`, `svg` | KPI cards; breakdown bars; `line`, `bar`, and `donut` SVG plots; reactive whitelisted vector canvases. |
+| Metrics & charts | `stats`, `chart`, `plot`, `svg` | KPI cards; breakdown bars; `line`, `bar`, and `donut` plots plus parameterized function curves with undefined-point breaks; reactive whitelisted vector canvases. |
 | Comparison & flow | `compare`, `checklist`, `timeline`, `architecture` | Comparison matrices, stateful checklists, selectable step timelines, and interactive layered diagrams. |
+| Topology & data | `graph`, `table` | Auto-laid node/edge graphs with no manual coordinates; sortable, filterable engineering tables with derived cells. |
 | Notes & config | `callout`, `code` | Semantic callouts and `{{var}}`-interpolated, copyable command/config snippets. |
 | Layout containers | `grid`, `tabs`, `accordion` | Responsive multi-column grids, persistent tabs, and collapsible sections sharing live variable bindings. |
 
@@ -94,16 +95,17 @@ flowchart LR
   Core --> Pure[Schemas / Formula Engine / Fallback]
 ```
 
-- **MCP Tools**: `render_threadframe` (renders any custom `UiSpec`) and `inspect_preset_frame` (renders a showcase preset).
-- **MCP Resources**: `ui://threadframe/view.html` (the single-file runtime bundle) and `threadframe://examples/svg` (three editable SVG + control recipes).
-- **Formulas & Templates**: Controls bind variables into an arithmetic/comparison/ternary recursive-descent parser (`min`, `max`, `abs`, `floor`, `ceil`, `round`, `clamp`, `if`, plus string `+` concatenation). Code blocks substitute `{{var}}` safely via `textContent`. See [docs/example.json](docs/example.json).
+- **MCP Tools**: `render_threadframe` (renders any custom `UiSpec`), `inspect_preset_frame` (renders a showcase preset), and the compact shortcuts `present_calculator`, `present_decision`, and `present_diagram`. Shortcuts expand into a standard UiSpec through a pure compiler, so Zod validation, rendering, `--embed`, and Markdown fallback stay single-sourced.
+- **MCP Resources**: `ui://threadframe/view.html` (the single-file runtime bundle), `threadframe://examples/svg` (three editable SVG + control recipes), and `threadframe://examples/recipes` (minimal shortcut inputs).
+- **Formulas & Templates**: Controls bind variables into an arithmetic/comparison/ternary recursive-descent parser (`min`, `max`, `abs`, `floor`, `ceil`, `round`, `clamp`, `if`, plus string `+` concatenation). Curve plots sample formulas over a domain and break at undefined points. Code blocks substitute `{{var}}` safely via `textContent`. See [docs/example.json](docs/example.json).
+- **Snapshot Loop (opt-in)**: When a local `--stdio` shortcut call provides an explicit `statePath`, the Apply & remember action writes a compact JSON snapshot; `read_threadframe_state` returns it on the next turn. Without `statePath`, nothing touches disk.
 
 ## Security Boundaries
 
 - **Zero `eval` / `new Function`**: All expressions run through a dedicated tokenizer and recursive-descent parser safe under strict CSP sandboxes.
 - **Native DOM & SVG Whitelist**: Elements are built with `createElement` / `createElementNS` and `textContent`. SVG only allows `rect`, `circle`, `line`, `path`, `text`, `polyline`, and `polygon` with validated coordinates and semantic theme tokens; `<script>`, `<foreignObject>`, inline event handlers, and external URLs are rejected by schema.
 - **Bounded Non-Recursive Schema**: Tool JSON Schemas expand without `$ref` recursion so strict validators accept every block kind cleanly.
-- **Scoped File Writes**: `embedPath` is only accepted in local `--stdio` mode for `.html` paths (blocked over HTTP and protected against reserved device names).
+- **Scoped File Writes**: `embedPath` and snapshot `statePath` are only accepted in local `--stdio` mode (blocked over HTTP) for `.html` / `.json` paths, with device names, ADS streams, UNC paths, trailing dots, and symlink components rejected.
 - **Render Telemetry & Clipboard Fallback**: Views emit `threadframe:render` (`ready`, `partial`, `error`) and `data-iui-render-status`. Copy actions fall back cleanly from `navigator.clipboard` to a synchronous `<textarea>` copy inside sandboxed iframes.
 
 ## Development

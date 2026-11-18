@@ -49,6 +49,7 @@ export const CalculatorInputSchema = z.object({
   template: z.string().optional(),
   templateLanguage: z.string().regex(/^[a-zA-Z0-9_+-]*$/).optional(),
   caption: z.string().optional(),
+  statePath: z.string().optional(),
 });
 
 export const DecisionInputSchema = z.object({
@@ -68,6 +69,7 @@ export const DecisionInputSchema = z.object({
     values: z.array(z.string()).min(2).max(4),
     winner: z.number().int().min(0).max(3).optional(),
   })).optional(),
+  statePath: z.string().optional(),
 });
 
 export const DiagramInputSchema = z.object({
@@ -94,6 +96,7 @@ export const DiagramInputSchema = z.object({
   })).optional(),
   inputs: z.array(InputSchema).optional(),
   caption: z.string().optional(),
+  statePath: z.string().optional(),
 });
 
 export type CalculatorInput = z.infer<typeof CalculatorInputSchema>;
@@ -141,6 +144,24 @@ function resolveId(
 
 function templateVariables(template: string): string[] {
   return [...template.matchAll(/{{\s*([a-zA-Z_]\w*)\s*}}/g)].map((match) => match[1]);
+}
+
+function shortcutActions(options: {
+  statePath?: string;
+  saveLabel: string;
+  sendLabel: string;
+  copyLabel: string;
+  sendTemplate: string;
+  copyTemplate: string;
+}): NonNullable<UiSpec["actions"]> {
+  const copy = { label: options.copyLabel, kind: "copy_state" as const, promptTemplate: options.copyTemplate };
+  if (options.statePath) {
+    return [
+      { label: options.saveLabel, kind: "save_state", statePath: options.statePath, promptTemplate: options.sendTemplate },
+      copy,
+    ];
+  }
+  return [{ label: options.sendLabel, kind: "send_message", promptTemplate: options.sendTemplate }, copy];
 }
 
 function validateFormula(
@@ -278,10 +299,14 @@ export function compileCalculator(input: CalculatorInput): CompileResult {
       ...(input.subtitle ? { subtitle: input.subtitle } : {}),
       badge: input.badge ?? "Interactive calculator",
       blocks,
-      actions: [
-        { label: "Apply settings", kind: "send_message", promptTemplate: "Use these configuration values: {{state_summary}}" },
-        { label: "Copy settings", kind: "copy_state", promptTemplate: "Configuration: {{state_summary}}" },
-      ],
+      actions: shortcutActions({
+        statePath: input.statePath,
+        saveLabel: "Apply & remember",
+        sendLabel: "Apply settings",
+        copyLabel: "Copy settings",
+        sendTemplate: "Use these configuration values: {{state_summary}}",
+        copyTemplate: "Configuration: {{state_summary}}",
+      }),
     },
   };
 }
@@ -339,10 +364,14 @@ export function compileDecision(input: DecisionInput): CompileResult {
       ...(input.subtitle ? { subtitle: input.subtitle } : input.question ? { subtitle: input.question } : {}),
       badge: input.badge ?? "Decision matrix",
       blocks,
-      actions: [
-        { label: "Apply decision", kind: "send_message", promptTemplate: "Decision: {{state_summary}}" },
-        { label: "Copy decision", kind: "copy_state", promptTemplate: "Decision: {{state_summary}}" },
-      ],
+      actions: shortcutActions({
+        statePath: input.statePath,
+        saveLabel: "Record decision",
+        sendLabel: "Apply decision",
+        copyLabel: "Copy decision",
+        sendTemplate: "Decision: {{state_summary}}",
+        copyTemplate: "Decision: {{state_summary}}",
+      }),
     },
   };
 }
@@ -397,10 +426,14 @@ export function compileDiagram(input: DiagramInput): CompileResult {
       ...(input.subtitle ? { subtitle: input.subtitle } : {}),
       badge: input.badge ?? "Auto-laid diagram",
       blocks,
-      actions: [
-        { label: "Send to chat", kind: "send_message", promptTemplate: "Continue from this diagram: {{state_summary}}" },
-        { label: "Copy summary", kind: "copy_state", promptTemplate: "Diagram: {{state_summary}}" },
-      ],
+      actions: shortcutActions({
+        statePath: input.statePath,
+        saveLabel: "Remember diagram",
+        sendLabel: "Send to chat",
+        copyLabel: "Copy summary",
+        sendTemplate: "Continue from this diagram: {{state_summary}}",
+        copyTemplate: "Diagram: {{state_summary}}",
+      }),
     },
   };
 }

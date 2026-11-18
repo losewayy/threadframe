@@ -1,10 +1,21 @@
 import type { UiBlock } from "../../schema/uiSpec.js";
 import type { VarScope } from "../formula.js";
+import type { ThreadFrameSnapshot } from "../summary.js";
 
 export interface RendererHostBridge {
   sendMessage?: (text: string) => Promise<void> | void;
+  saveState?: (snapshot: ThreadFrameSnapshot, statePath: string) => Promise<void>;
   onReplayRequested?: () => void;
   onRender?: (report: RenderReport) => void;
+}
+
+export type UiActionKind = "send_message" | "copy_state" | "save_state";
+
+export interface UiActionRequest {
+  label: string;
+  promptTemplate?: string;
+  kind?: UiActionKind;
+  statePath?: string;
 }
 
 export interface RenderReport {
@@ -33,6 +44,7 @@ export interface UiState {
   setStatus(message: string): void;
   prompt(text: string): boolean;
   copy(text: string): Promise<boolean>;
+  dispatchAction(action: UiActionRequest): Promise<void>;
 }
 
 export interface BlockRenderContext {

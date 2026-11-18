@@ -64,19 +64,22 @@ cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 - **HTML 内嵌型客户端**（如 Antigravity，或在非 UI 宿主下设置环境变量 `THREADFRAME_HOST=antigravity`）：在本地 `--stdio` 模式下可选传入 `embedPath`，直接将透明紧凑的 `--embed` 单文件写到指定产物目录，不浪费模型上下文。
 - **纯终端 / 文本客户端**：自动输出结构清楚的 Markdown 表格、清单和实时算好的代码块。
 
-## 积木目录（15 种）
+## 积木目录（17 种）
 
-包含 **12 种叶子积木** 和 **3 种布局容器**：
+包含 **14 种叶子积木** 和 **3 种布局容器**：
 
 | 类别 | 积木 | 用途 |
 | --- | --- | --- |
 | 决策与输入 | `choices`、`controls` | 选择卡片（修改变量或触发提示词）；滑块、开关与分段选择器。 |
-| 指标与可视化 | `stats`、`chart`、`plot`、`svg` | KPI 指标卡；进度条/堆叠条；折线/竖柱/圆环矢量图；可联动的安全 SVG 画板。 |
+| 指标与可视化 | `stats`、`chart`、`plot`、`svg` | KPI 指标卡；进度条/堆叠条；折线/竖柱/圆环矢量图，以及支持定义域采样和断点容错的参数化函数曲线；可联动的安全 SVG 画板。 |
 | 对比与流程 | `compare`、`checklist`、`timeline`、`architecture` | 方案对比矩阵、带进度清单、可选步骤时间线、分层架构点击视图。 |
+| 拓扑与数据 | `graph`、`table` | 自动分层排版的节点连线图（无需手写坐标），以及可排序、关键词/状态筛选的工程数据表。 |
 | 提示与代码 | `callout`、`code` | 语义提示条，以及支持 `{{var}}` 变量实时替换与一键复制的代码/命令预览卡。 |
 | 布局容器 | `grid`、`tabs`、`accordion` | 响应式分栏网格、标签页与折叠抽屉，隐藏面板中的控件和图表同样保持实时联动。 |
 
 容器采用有界扁平组合：`grid` 内放置叶子积木，`tabs` 和 `accordion` 每项可放叶子积木或一层 `grid`，Schema 不含递归 `$ref`。
+
+三个快捷工具 `present_calculator`、`present_decision`、`present_diagram` 接收扁平业务入参，由纯函数编译器展开成标准 UiSpec，后续的校验、渲染、`--embed` 导出和 Markdown 降级完全复用同一条链路。
 
 7 个内置展示预设（`inspect_preset_frame`）：`gpu-vram-tuner`、`runtime-compare`、`deploy-checklist`、`mcp-architecture`、`composable-workbench`、`svg-visual-lab`、`agent-launch-kit`。
 
@@ -84,7 +87,8 @@ cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 
 - **零 `eval` / `new Function`**：所有公式通过自研词法与递归下降解析器求值，支持四则运算、比较、三元表达式、`min`/`max`/`abs`/`floor`/`ceil`/`round`/`clamp`/`if`，当 `+` 任意一侧为字符串时执行字符串拼接；可在严格 CSP 沙盒下运行。
 - **原生 DOM 与 SVG 白名单**：所有节点均通过 `createElement` / `createElementNS` 与 `textContent` 构建；`svg` 积木仅允许 `rect`、`circle`、`line`、`path`、`text`、`polyline`、`polygon` 和语义配色 token，Schema 直接拒绝脚本、事件属性和外链。
-- **受控写盘与复制兜底**：`embedPath` 仅允许本地 `--stdio` 模式写入 `.html` 文件（HTTP 模式直接禁止并拦截非法设备路径）；沙盒内嵌页跳过无效宿主握手，按钮自动回退为安全剪贴板复制（`navigator.clipboard` 不可用时自动启用 `<textarea>` 兼容复制）。
+- **受控写盘与复制兜底**：`embedPath` 和状态快照 `statePath` 仅允许本地 `--stdio` 模式写入 `.html` / `.json` 文件（HTTP 模式直接禁止），并拦截设备名、ADS、UNC、尾点路径和符号链接逃逸；沙盒内嵌页跳过无效宿主握手，按钮自动回退为安全剪贴板复制（`navigator.clipboard` 不可用时自动启用 `<textarea>` 兼容复制）。
+- **可选的快照闭环**：本地 `--stdio` 的快捷工具可以显式传入 `statePath`，点击“Apply & remember”后保存精简状态快照，下一轮用 `read_threadframe_state` 只读取回；不传路径时完全不触碰磁盘。
 - **示例参考**：MCP 工具内置最小联动示例，同时暴露 `threadframe://examples/svg` 资源和可运行的 [docs/example.json](docs/example.json)。
 
 ## 开发与校验

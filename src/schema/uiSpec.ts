@@ -218,8 +218,9 @@ export const UiBlockSchema = z.discriminatedUnion("kind", [
 
 export const UiActionSchema = z.object({
   label: z.string(),
-  kind: z.enum(["send_message", "copy_state"]).optional(),
+  kind: z.enum(["send_message", "copy_state", "save_state"]).optional(),
   promptTemplate: z.string().optional(),
+  statePath: z.string().optional(),
 });
 
 export const UiSpecSchema = z.object({

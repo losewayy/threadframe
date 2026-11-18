@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-19
+
+### Added
+
+- Shortcut tools `present_calculator`, `present_decision`, and `present_diagram` backed by a pure compiler that expands flat input into a standard UiSpec.
+- `graph` block with deterministic layered auto-layout, cycle-safe routing, live node values, and conditional edge highlighting.
+- Parameterized `plot` curves with domain sampling, undefined-point breaks, keyboard/pointer inspection, and Markdown sample tables.
+- `table` block with sortable columns, keyword and status filtering, derived formula cells, and constrained internal scrolling.
+- Opt-in local `--stdio` state snapshots (`statePath`, `save_threadframe_state`, `read_threadframe_state`) with HTTP writes disabled.
+- Labeled intent summaries that separate changed values from untouched defaults.
+- Shared path guard for embed and snapshot files, now rejecting symlink components.
+
+### Changed
+
+- Shortcut and preset tool descriptions now state when to call them and when to stay text-only.
+
 ## [0.3.0] - 2026-11-16
 
 ### Changed

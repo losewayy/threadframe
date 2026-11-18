@@ -83,6 +83,16 @@ const renderer = new ThreadFrameRenderer(root, {
         content: [{ type: "text", text }],
       });
   } : undefined,
+  saveState: useHostBridge ? async (snapshot, statePath) => {
+      const result = await app.callServerTool({
+        name: "save_threadframe_state",
+        arguments: { statePath, snapshot },
+      });
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text?: string }> | undefined;
+        throw new Error(content?.find((part) => part.type === "text" && part.text)?.text ?? "Snapshot rejected");
+      }
+  } : undefined,
   onRender: reportRender,
   onReplayRequested: currentStandaloneSpec
     ? () => {
