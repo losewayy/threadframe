@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { hasCjkText } from "./runtime/display.js";
-import { evaluateFormula, formulaIdentifiers, type VarScope } from "./runtime/formula.js";
+import { evaluateFormula, evaluateNumericOrNull, formulaIdentifiers, type VarScope } from "./runtime/formula.js";
 import type { ControlItem, LeafBlock, UiBlock, UiSpec } from "./schema/uiSpec.js";
 import { IconNameSchema } from "./schema/atoms.js";
 
@@ -182,8 +182,13 @@ function validateFormula(
   }
   const scope: VarScope = {};
   for (const name of known) scope[name] = 0;
-  if (evaluateFormula(expr, scope) === null) {
+  const evaluated = evaluateFormula(expr, scope);
+  if (evaluated === null) {
     issues.push(`${where}: formula is not valid; use numbers, variables, and min/max/round/clamp/if`);
+    return;
+  }
+  if (typeof evaluated === "string" && evaluateNumericOrNull(expr, scope) === null) {
+    issues.push(`${where}: numeric formula must evaluate to a number, not "${evaluated}"`);
   }
 }
 
@@ -282,14 +287,13 @@ export function compileCalculator(input: CalculatorInput): CompileResult {
   const dense = input.inputs.length + metrics.length + bars.length + (input.template ? 2 : 0) > 7;
   const zh = hasCjkText(input.title, input.subtitle, ...input.inputs.map((item) => item.label));
   let blocks: UiBlock[];
-  if (dense && secondary.length) {
-    const tuneChildren = [controlsBlock, ...(statsBlock ? [statsBlock] : [])];
-    const outputChildren = secondary.filter((block) => block !== statsBlock);
+  if (dense && codeBlock && (statsBlock || chartBlock)) {
+    const tuneChildren = [controlsBlock, ...(statsBlock ? [statsBlock] : []), ...(chartBlock ? [chartBlock] : [])];
     blocks = [{
       kind: "tabs", id: "calculator-views", defaultTab: "tune",
       tabs: [
         { id: "tune", label: zh ? "调参" : "Tune", children: tuneChildren },
-        { id: "output", label: zh ? "输出" : "Output", children: outputChildren.length ? outputChildren : [controlsBlock] },
+        { id: "output", label: zh ? "输出" : "Output", children: [codeBlock] },
       ],
     }];
   } else {
@@ -393,20 +397,32 @@ export function compileDiagram(input: DiagramInput): CompileResult {
     id: resolveId(node.id, node.label, index, used, issues, "node"),
   }));
   const nodeIds = new Set(nodes.map((node) => node.id));
-  const aliases = new Map<string, string>();
+  const byId = new Map<string, string>();
+  const byLabel = new Map<string, string | null>();
   input.nodes.forEach((node, index) => {
-    aliases.set(nodes[index].id, nodes[index].id);
-    aliases.set(node.label, nodes[index].id);
-    if (node.id) aliases.set(node.id, nodes[index].id);
+    const resolved = nodes[index].id;
+    byId.set(resolved, resolved);
+    if (node.id) byId.set(node.id, resolved);
+    byLabel.set(node.label, byLabel.has(node.label) ? null : resolved);
   });
   nodes.forEach((node) => {
     if (node.valueFormula) validateFormula(node.valueFormula, known, `node "${node.label}" valueFormula`, issues);
   });
   const edges = (input.edges ?? []).map((edge) => {
-    const from = aliases.get(edge.from);
-    const to = aliases.get(edge.to);
-    if (!from) issues.push(`edge "${edge.from} → ${edge.to}": unknown source; use one of ${[...nodeIds].join(", ")}`);
-    if (!to) issues.push(`edge "${edge.from} → ${edge.to}": unknown target; use one of ${[...nodeIds].join(", ")}`);
+    const fromLabel = byLabel.get(edge.from);
+    const toLabel = byLabel.get(edge.to);
+    const from = byId.get(edge.from) ?? (fromLabel ?? undefined);
+    const to = byId.get(edge.to) ?? (toLabel ?? undefined);
+    if (!from) {
+      issues.push(fromLabel === null
+        ? `edge "${edge.from} → ${edge.to}": ambiguous label "${edge.from}"; reference node by id`
+        : `edge "${edge.from} → ${edge.to}": unknown source; use one of ${[...nodeIds].join(", ")}`);
+    }
+    if (!to) {
+      issues.push(toLabel === null
+        ? `edge "${edge.from} → ${edge.to}": ambiguous label "${edge.to}"; reference node by id`
+        : `edge "${edge.from} → ${edge.to}": unknown target; use one of ${[...nodeIds].join(", ")}`);
+    }
     if (edge.activeFormula) validateFormula(edge.activeFormula, known, `edge "${edge.from} → ${edge.to}" activeFormula`, issues);
     return { ...edge, from: from ?? edge.from, to: to ?? edge.to };
   });

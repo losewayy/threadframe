@@ -1,4 +1,4 @@
-type VectorTag = "svg" | "g" | "path" | "rect" | "circle" | "line" | "text" | "title" | "polyline" | "polygon";
+type VectorTag = "svg" | "defs" | "clipPath" | "g" | "path" | "rect" | "circle" | "line" | "text" | "title" | "polyline" | "polygon";
 
 export function svgNode<K extends VectorTag>(tag: K, className?: string): SVGElementTagNameMap[K] {
   const node = document.createElementNS("http://www.w3.org/2000/svg", tag);

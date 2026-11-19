@@ -28,6 +28,8 @@ export const PlotBlockSchema = z.object({
   curves: z.array(CurveSeriesSchema).min(1).optional(),
   xMin: z.number().optional(),
   xMax: z.number().optional(),
+  yMin: z.number().optional(),
+  yMax: z.number().optional(),
   xVariable: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).optional(),
   samples: z.number().int().min(2).max(400).optional(),
   xLabel: z.string().optional(),
@@ -43,6 +45,8 @@ export const PlotBlockSchema = z.object({
   message: "Curves are only supported in line mode",
 }).refine((block) => !block.curves || (block.xMin !== undefined && block.xMax !== undefined && block.xMin < block.xMax), {
   message: "Curves need xMin < xMax",
+}).refine((block) => block.yMin === undefined || block.yMax === undefined || block.yMin < block.yMax, {
+  message: "Plot needs yMin < yMax",
 });
 
 const color = z.enum(["primary", "accent", "success", "warn", "muted", "text"]);

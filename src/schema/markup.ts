@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { CompileResult } from "../compile.js";
 import { slugify } from "../compile.js";
-import { evaluateFormula, formulaIdentifiers, type VarScope } from "../runtime/formula.js";
+import { evaluateFormula, evaluateNumericOrNull, formulaIdentifiers, type VarScope } from "../runtime/formula.js";
 import { decodeInlineEntities, parseInlineText } from "./inlineText.js";
 import {
   parseMarkup, MarkupSyntaxError, type MarkupAttribute, type MarkupElement, type MarkupNode,
@@ -30,10 +30,12 @@ interface FormulaSource {
   expression: string;
   field: string;
   offset: number;
+  numeric?: boolean;
   locals?: string[];
 }
 
 const MAX_ISSUES = 12;
+const numericFormulaTags = new Set(["metric", "bar", "curve", "point", "node", "rect", "circle", "line"]);
 const controlTags = new Set(["slider", "toggle", "select"]);
 const formulaField = (name: string) => name === "formula" || name.endsWith("Formula");
 const fail = (offset: number, message: string): never => { throw new MarkupSyntaxError(message, offset); };
@@ -62,8 +64,17 @@ function formulaIssue(source: FormulaSource, scope: VarScope): string | undefine
   for (const name of source.locals ?? []) if (!Object.hasOwn(local, name)) local[name] = 0;
   const missing = formulaIdentifiers(source.expression).find((name) => !Object.hasOwn(local, name));
   if (missing) return `unknown variable "${missing}"; declare it with a control or fix its name`;
-  if (evaluateFormula(source.expression, local) === null) {
-    return "invalid formula; use arithmetic, comparisons, and math helpers such as round or clamp";
+  let evaluated = evaluateFormula(source.expression, local);
+  if (evaluated === null && source.locals?.length) {
+    const probed = { ...local };
+    for (const name of source.locals) probed[name] = 1.37;
+    evaluated = evaluateFormula(source.expression, probed);
+  }
+  if (evaluated === null) {
+    return "invalid formula; use arithmetic, comparisons, and math helpers such as round, sqrt, or clamp";
+  }
+  if (source.numeric && typeof evaluated === "string" && evaluateNumericOrNull(source.expression, local) === null) {
+    return `numeric formula must evaluate to a number, not "${evaluated}"`;
   }
 }
 
@@ -196,7 +207,12 @@ class MarkupCompiler {
       const where = `<${element.name}>.${name}`;
       try {
         fields[field] = attributeValue(attribute, where, formulaField(field));
-        if (formulaField(field)) this.formulas.push({ expression: String(fields[field]), field: where, offset: attribute.offset });
+        if (formulaField(field)) {
+          this.formulas.push({
+            expression: String(fields[field]), field: where, offset: attribute.offset,
+            numeric: numericFormulaTags.has(element.name),
+          });
+        }
       } catch (error) {
         if (!(error instanceof MarkupSyntaxError)) throw error;
         problems.push({ offset: error.offset, message: error.message, field });

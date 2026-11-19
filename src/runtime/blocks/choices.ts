@@ -6,6 +6,7 @@ export const renderChoices: BlockRenderer<"choices"> = (block, context) => {
   const { state } = context;
   const copy = uiCopy(Boolean(state.zh));
   const grid = el("div", "iui-choices");
+  const groupIds = new Set(block.options.map((opt) => opt.id));
   const buttons: Array<{ id: string; btn: HTMLButtonElement }> = [];
 
   for (const opt of block.options) {
@@ -27,7 +28,9 @@ export const renderChoices: BlockRenderer<"choices"> = (block, context) => {
     }
 
     btn.addEventListener("click", () => {
-      if (!block.multi) state.selectedChoiceIds.clear();
+      if (!block.multi) {
+        for (const id of groupIds) state.selectedChoiceIds.delete(id);
+      }
       if (state.selectedChoiceIds.has(opt.id) && block.multi) {
         state.selectedChoiceIds.delete(opt.id);
       } else {

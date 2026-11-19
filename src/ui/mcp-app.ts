@@ -160,11 +160,13 @@ if (useHostBridge) {
     hostConnected = true;
     syncHostStyles(app.getHostContext());
     if (lastReport) reportRender(lastReport);
-  }).catch(() => {
-    // Standalone / non-MCP iframe fallback if parent does not speak MCP Apps JSON-RPC
+  }).catch((error: unknown) => {
     if (!currentStandaloneSpec) {
-      currentStandaloneSpec = PRESETS["gpu-vram-tuner"];
-      runStandaloneProgressiveBuild(currentStandaloneSpec);
+      const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+      renderer.renderFull({
+        title: "MCP App host connection failed",
+        blocks: [{ kind: "callout", tone: "warn", body: `Could not connect to the host view${detail}.` }],
+      });
     }
   });
 }

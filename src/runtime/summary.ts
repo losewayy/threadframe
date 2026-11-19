@@ -50,7 +50,7 @@ export function buildIntentSummary(input: SummaryInput): string {
   }
   const parts: string[] = [];
   if (changed.length) parts.push(`Changed: ${changed.join(", ")}`);
-  else if (defaults.length) parts.push(`Defaults: ${defaults.join(", ")}`);
+  if (defaults.length) parts.push(`Defaults: ${defaults.join(", ")}`);
   const choices = [...input.selectedChoices].map((id) => {
     const label = input.choiceLabels.get(id) ?? id;
     const prompt = input.choicePrompts?.get(id);

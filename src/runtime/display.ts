@@ -48,14 +48,17 @@ export function interpolateCode(source: string, scope: VarScope): string {
 
 export function statDisplay(item: StatItem, scope: VarScope): { value: string; delta?: string; warning: boolean } {
   const result = item.formula ? evaluateFormula(item.formula, scope) : null;
-  const value = result !== null && (typeof result !== "number" || Number.isFinite(result)) ? result : item.value ?? 0;
+  const value = result !== null && (typeof result !== "number" || Number.isFinite(result))
+    ? result
+    : item.value ?? (item.formula ? "—" : 0);
   const deltaResult = item.deltaFormula ? evaluateFormula(item.deltaFormula, scope) : null;
   const delta = deltaResult !== null && (typeof deltaResult !== "number" || Number.isFinite(deltaResult))
     ? deltaResult : item.delta;
+  const numericValue = typeof value === "number" ? value : Number.NaN;
   return {
     value: typeof value === "number" ? formatNumber(value, item.precision) : String(value),
     delta: delta === undefined ? undefined : typeof delta === "number"
       ? `${delta > 0 ? "+" : ""}${formatNumber(delta, item.precision)}` : String(delta),
-    warning: item.warnAbove !== undefined && Number(value) > item.warnAbove,
+    warning: item.warnAbove !== undefined && Number.isFinite(numericValue) && numericValue > item.warnAbove,
   };
 }

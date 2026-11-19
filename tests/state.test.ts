@@ -41,7 +41,7 @@ test("intent summaries separate changed values from defaults and use labels", ()
   state.scope.workers = 4;
   const changed = state.summarize();
   assert.match(changed, /Changed: GPU count: 4/);
-  assert.ok(!changed.includes("Latency:"));
+  assert.match(changed, /Defaults: Latency: 100 ms/);
   state.selectedChoiceIds.add("fast");
   assert.match(state.summarize(), /Selected: Fast profile/);
 });
@@ -171,6 +171,23 @@ test("choices defer option prompts until Apply when a submit action exists", asy
     };
     quickGrid.children[0].click();
     assert.deepEqual(immediateSent, ["Apply auto fill"]);
+
+    const secondGroup = {
+      kind: "choices" as const,
+      options: [{ id: "gpu", label: "GPU" }, { id: "cpu", label: "CPU" }],
+    };
+    const multiState = new UiStateStore();
+    multiState.hasSubmitAction = true;
+    multiState.initDefaults([block, secondGroup]);
+    const g1 = renderChoices(block, multiState.createContext(() => makeNode() as unknown as HTMLElement)) as unknown as {
+      children: Array<{ click: () => void }>;
+    };
+    const g2 = renderChoices(secondGroup, multiState.createContext(() => makeNode() as unknown as HTMLElement)) as unknown as {
+      children: Array<{ click: () => void }>;
+    };
+    g1.children[0].click();
+    g2.children[1].click();
+    assert.deepEqual([...multiState.selectedChoiceIds], ["auto", "cpu"]);
   } finally {
     (globalThis as { document?: unknown }).document = previousDocument;
   }

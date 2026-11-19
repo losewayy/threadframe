@@ -5,6 +5,29 @@ export interface CurvePoint {
   y: number | null;
 }
 
+function hasPoleBetween(
+  formula: string,
+  scope: VarScope,
+  variable: string,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  smallEdge = Math.min(Math.abs(ay), Math.abs(by)),
+  largeEdge = Math.max(Math.abs(ay), Math.abs(by)),
+  depth = 0,
+): boolean {
+  if (ay * by >= 0) return false;
+  const midX = (ax + bx) / 2;
+  const midY = evaluateNumericSample(formula, { ...scope, [variable]: midX });
+  if (!Number.isFinite(midY) || Math.abs(midY) > largeEdge * 4) return true;
+  if (Math.abs(midY) <= smallEdge) return false;
+  if (depth >= 6) return Math.abs(midY) > smallEdge * 4;
+  return midY * ay < 0
+    ? hasPoleBetween(formula, scope, variable, ax, ay, midX, midY, smallEdge, largeEdge, depth + 1)
+    : hasPoleBetween(formula, scope, variable, midX, midY, bx, by, smallEdge, largeEdge, depth + 1);
+}
+
 /**
  * Samples a formula over a closed domain. Invalid or non-finite samples become null
  * so renderers can break the line instead of drawing a spike back to zero.
@@ -18,11 +41,23 @@ export function sampleCurve(
   variable = "x",
 ): CurvePoint[] {
   const count = Math.max(2, Math.min(400, Math.trunc(samples ?? 80)));
-  const points: CurvePoint[] = [];
+  const raw: CurvePoint[] = [];
   for (let index = 0; index < count; index++) {
     const x = xMin + (xMax - xMin) * index / (count - 1);
     const y = evaluateNumericSample(formula, { ...scope, [variable]: x });
-    points.push({ x, y: Number.isFinite(y) ? y : null });
+    raw.push({ x, y: Number.isFinite(y) ? y : null });
+  }
+  const points: CurvePoint[] = [];
+  for (let index = 0; index < raw.length; index++) {
+    const current = raw[index];
+    if (index > 0) {
+      const prev = raw[index - 1];
+      if (prev.y !== null && current.y !== null
+        && hasPoleBetween(formula, scope, variable, prev.x, prev.y, current.x, current.y)) {
+        points.push({ x: (prev.x + current.x) / 2, y: null });
+      }
+    }
+    points.push(current);
   }
   return points;
 }

@@ -1,7 +1,7 @@
 import { el, icon } from "../core/dom.js";
 import { uiCopy } from "../display.js";
 import type { BlockRenderer } from "../core/types.js";
-import { evaluateNumericFormula } from "../formula.js";
+import { evaluateNumericOrNull } from "../formula.js";
 
 export const renderControls: BlockRenderer<"controls"> = (block, context) => {
   const { state, bindings, syncControls } = context;
@@ -109,7 +109,15 @@ export const renderControls: BlockRenderer<"controls"> = (block, context) => {
 
       bindings.push({
         update: (scope) => {
-          const val = evaluateNumericFormula(metric.formula, scope, 0);
+          const val = evaluateNumericOrNull(metric.formula, scope);
+          if (val === null) {
+            numEl.textContent = "—";
+            numEl.classList.remove("warn");
+            pill.classList.remove("warn");
+            warning.hidden = true;
+            pill.title = "";
+            return;
+          }
           const txt = metric.precision !== undefined ? val.toFixed(metric.precision) : String(val);
           numEl.textContent = `${txt}${metric.unit ? ` ${metric.unit}` : ""}`;
           const warn = metric.warnAbove !== undefined && val > metric.warnAbove;

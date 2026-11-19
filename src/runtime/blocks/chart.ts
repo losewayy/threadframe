@@ -1,7 +1,7 @@
 import { el } from "../core/dom.js";
 import type { BlockRenderer } from "../core/types.js";
 import { formatNumber } from "../display.js";
-import { evaluateNumericFormula } from "../formula.js";
+import { evaluateNumericFormula, evaluateNumericOrNull } from "../formula.js";
 
 export const renderChart: BlockRenderer<"chart"> = (block, context) => {
   const { bindings } = context;
@@ -40,17 +40,22 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
 
     bindings.push({
       update: (scope) => {
-        const vals = segs.map((s) =>
-          s.bar.formula
-            ? evaluateNumericFormula(s.bar.formula, scope, s.bar.value ?? 0)
-            : (s.bar.value ?? 0),
+        const rawVals = segs.map((s) =>
+          s.bar.formula ? evaluateNumericOrNull(s.bar.formula, scope) : (s.bar.value ?? 0),
         );
+        const vals = rawVals.map((v) => v ?? 0);
         const dynamicMax = block.maxFormula
           ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? 100)
           : (block.max ?? Math.max(1, vals.reduce((a, b) => a + b, 0)));
 
         segs.forEach((s, idx) => {
-          const val = Math.max(0, vals[idx]);
+          const raw = rawVals[idx];
+          if (raw === null) {
+            s.seg.style.width = "0%";
+            s.valEl.textContent = "—";
+            return;
+          }
+          const val = Math.max(0, raw);
           const pct = Math.min(100, (val / Math.max(0.0001, dynamicMax)) * 100);
           s.seg.style.width = `${pct.toFixed(1)}%`;
           s.valEl.textContent = `${formatNumber(val)}${s.bar.unit ? ` ${s.bar.unit}` : defaultUnit}`;
@@ -83,17 +88,22 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
 
   bindings.push({
     update: (scope) => {
-      const vals = rows.map((r) =>
-        r.bar.formula
-          ? evaluateNumericFormula(r.bar.formula, scope, r.bar.value ?? 0)
-          : (r.bar.value ?? 0),
+      const rawVals = rows.map((r) =>
+        r.bar.formula ? evaluateNumericOrNull(r.bar.formula, scope) : (r.bar.value ?? 0),
       );
+      const vals = rawVals.map((v) => v ?? 0);
       const maxVal = block.maxFormula
         ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? 100)
         : (block.max ?? Math.max(1, ...vals));
 
       rows.forEach((r, idx) => {
-        const val = Math.max(0, vals[idx]);
+        const raw = rawVals[idx];
+        if (raw === null) {
+          r.fill.style.width = "0%";
+          r.valEl.textContent = "—";
+          return;
+        }
+        const val = Math.max(0, raw);
         const pct = Math.min(100, (val / Math.max(0.0001, maxVal)) * 100);
         r.fill.style.width = `${pct.toFixed(1)}%`;
         r.valEl.textContent = `${formatNumber(val)}${r.bar.unit ? ` ${r.bar.unit}` : defaultUnit}`;

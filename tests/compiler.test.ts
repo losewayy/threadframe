@@ -102,7 +102,14 @@ test("calculator folds dense secondary content into tabs without nesting violati
   assert.ok(compiled.ok);
   const spec = UiSpecSchema.parse(compiled.spec);
   assert.equal(spec.blocks[0].kind, "tabs");
+  assert.ok(spec.blocks[0].tabs[0].children.some((child) => child.kind === "chart"));
   assert.ok(renderFallbackMarkdown(spec).includes("run 1"));
+
+  const strMetric = compileCalculator(calculator({
+    metrics: [{ label: "Bad", formula: "'oops'" }],
+  }));
+  assert.equal(strMetric.ok, false);
+  assert.match(strMetric.ok ? "" : strMetric.issues.join("\n"), /must evaluate to a number/);
 });
 
 test("decision compiles comparison and choices, and validates indexes", () => {

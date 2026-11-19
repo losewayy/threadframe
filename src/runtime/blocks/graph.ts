@@ -1,7 +1,7 @@
 import { el, icon } from "../core/dom.js";
 import { svgCanvas, svgNode, svgText } from "../core/svg.js";
 import type { BlockRenderer } from "../core/types.js";
-import { evaluateFormula, evaluateNumericFormula, type VarScope } from "../formula.js";
+import { evaluateFormula, evaluateNumericOrNull, type VarScope } from "../formula.js";
 import { formatNumber } from "../display.js";
 import { fitGraphLabel, layoutGraph } from "../graphLayout.js";
 
@@ -108,7 +108,8 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
     update: (scope) => {
       for (const { node, value, valueWidth } of nodeViews) {
         if (value && node.valueFormula) {
-          const result = `${formatNumber(evaluateNumericFormula(node.valueFormula, scope, 0))}${node.unit ? ` ${node.unit}` : ""}`;
+          const num = evaluateNumericOrNull(node.valueFormula, scope);
+          const result = num === null ? "—" : `${formatNumber(num)}${node.unit ? ` ${node.unit}` : ""}`;
           value.textContent = fitGraphLabel(result, valueWidth);
         }
       }

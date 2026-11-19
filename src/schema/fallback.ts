@@ -1,4 +1,4 @@
-import { evaluateNumericFormula, type VarScope } from "../runtime/formula.js";
+import { evaluateNumericFormula, evaluateNumericOrNull, type VarScope } from "../runtime/formula.js";
 import { plotCenter, plotValues, svgGeometry } from "../runtime/vector.js";
 import { formatNumber, statDisplay, interpolateCode } from "../runtime/display.js";
 import { curveSummary, sampleCurve } from "../runtime/curve.js";
@@ -164,17 +164,17 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
       }
       if (block.metrics?.length) {
         for (const metric of block.metrics) {
-          const val = evaluateNumericFormula(metric.formula, scope, 0);
-          const formatted = metric.precision !== undefined ? val.toFixed(metric.precision) : String(val);
-          lines.push(`- **${inline(metric.label)}**: ${formatted}${unit(metric.unit)}`);
+          const val = evaluateNumericOrNull(metric.formula, scope);
+          const formatted = val === null ? "—" : (metric.precision !== undefined ? val.toFixed(metric.precision) : String(val));
+          lines.push(`- **${inline(metric.label)}**: ${formatted}${val === null ? "" : unit(metric.unit)}`);
         }
       }
       break;
     }
     case "chart": {
       for (const bar of block.bars) {
-        const val = bar.formula ? evaluateNumericFormula(bar.formula, scope, bar.value ?? 0) : (bar.value ?? 0);
-        lines.push(`- ${inline(bar.label)}: ${formatNumber(val)}${unit(bar.unit || block.unit)}`);
+        const val = bar.formula ? evaluateNumericOrNull(bar.formula, scope) : (bar.value ?? 0);
+        lines.push(`- ${inline(bar.label)}: ${val === null ? "—" : `${formatNumber(val)}${unit(bar.unit || block.unit)}`}`);
       }
       break;
     }
@@ -206,10 +206,10 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
     }
     case "graph": {
       for (const node of block.nodes) {
-        const value = node.valueFormula ? evaluateNumericFormula(node.valueFormula, scope, 0) : undefined;
+        const value = node.valueFormula ? evaluateNumericOrNull(node.valueFormula, scope) : undefined;
         const details = [
           node.role && inline(node.role),
-          value !== undefined ? `${formatNumber(value)}${unit(node.unit)}` : undefined,
+          value !== undefined ? (value === null ? "—" : `${formatNumber(value)}${unit(node.unit)}`) : undefined,
           node.detail && inline(node.detail),
         ].filter(Boolean).join("; ");
         lines.push(`- ${node.group ? `[${inline(node.group)}] ` : ""}**${inline(node.label)}**${details ? `: ${details}` : ""}`);

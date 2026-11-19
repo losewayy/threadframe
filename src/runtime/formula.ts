@@ -87,6 +87,11 @@ function tokenize(input: string): Token[] {
         raw += input[i];
         i++;
       }
+      if ((input[i] === "e" || input[i] === "E") && /[+-]?\d/.test(input.slice(i + 1, i + 3))) {
+        raw += input[i++];
+        if (input[i] === "+" || input[i] === "-") raw += input[i++];
+        while (i < input.length && /[0-9]/.test(input[i])) raw += input[i++];
+      }
       const num = Number(raw);
       if (!Number.isFinite(num)) {
         throw new Error(`Invalid number token '${raw}' in formula`);
@@ -139,6 +144,16 @@ const FUNCTIONS: Record<string, (...args: EvalValue[]) => EvalValue> = {
   },
   clamp: (v = 0, lo = 0, hi = 1) => Math.min(toNum(hi), Math.max(toNum(lo), toNum(v))),
   if: (cond = false, a = 0, b = 0) => (toBool(cond) ? a : b),
+  sin: (a = 0) => Math.sin(toNum(a)),
+  cos: (a = 0) => Math.cos(toNum(a)),
+  tan: (a = 0) => Math.tan(toNum(a)),
+  sqrt: (a = 0) => Math.sqrt(toNum(a)),
+  pow: (a = 0, b = 0) => Math.pow(toNum(a), toNum(b)),
+  exp: (a = 0) => Math.exp(toNum(a)),
+  log: (a = 0) => Math.log(toNum(a)),
+  log2: (a = 0) => Math.log2(toNum(a)),
+  log10: (a = 0) => Math.log10(toNum(a)),
+  sign: (a = 0) => Math.sign(toNum(a)),
 };
 
 class Parser {
@@ -147,7 +162,6 @@ class Parser {
   constructor(
     private readonly tokens: Token[],
     private readonly scope: VarScope,
-    private readonly strict = false,
   ) {}
 
   private peek(): Token | undefined {
@@ -261,8 +275,8 @@ class Parser {
       const a = toNum(left);
       const b = toNum(right);
       if (op === "*") left = a * b;
-      else if (op === "/") left = this.strict ? a / b : (b === 0 ? 0 : a / b);
-      else left = this.strict ? a % b : (b === 0 ? 0 : a % b);
+      else if (op === "/") left = a / b;
+      else left = a % b;
     }
     return left;
   }
@@ -358,7 +372,8 @@ export function evaluateFormula(expr: string, scope: VarScope): EvalValue | null
   try {
     const tokens = tokenize(trimmed);
     if (tokens.length === 0) return null;
-    return new Parser(tokens, scope).parse();
+    const value = new Parser(tokens, scope).parse();
+    return typeof value === "number" && !Number.isFinite(value) ? null : value;
   } catch {
     return null;
   }
@@ -374,7 +389,7 @@ export function evaluateNumericSample(expr: string, scope: VarScope): number {
   try {
     const tokens = tokenize(trimmed);
     if (tokens.length === 0) return Number.NaN;
-    const value = new Parser(tokens, scope, true).parse();
+    const value = new Parser(tokens, scope).parse();
     if (typeof value === "number") return value;
     if (typeof value === "boolean") return value ? 1 : 0;
     const parsed = Number(value);
@@ -385,11 +400,17 @@ export function evaluateNumericSample(expr: string, scope: VarScope): number {
 }
 
 /**
+ * Evaluates a formula strictly to a finite number, returning null when the expression
+ * is invalid, non-numeric, or undefined (such as division by zero or sqrt(-1)).
+ */
+export function evaluateNumericOrNull(expr: string, scope: VarScope): number | null {
+  const num = evaluateNumericSample(expr, scope);
+  return Number.isFinite(num) ? num : null;
+}
+
+/**
  * Convenience helper evaluating a formula to a finite number with fallback.
  */
 export function evaluateNumericFormula(expr: string, scope: VarScope, fallback = 0): number {
-  const res = evaluateFormula(expr, scope);
-  if (res === null) return fallback;
-  const num = toNum(res);
-  return Number.isFinite(num) ? num : fallback;
+  return evaluateNumericOrNull(expr, scope) ?? fallback;
 }

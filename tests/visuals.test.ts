@@ -3,7 +3,7 @@ import test from "node:test";
 import { DiagramInputSchema, compileDiagram } from "../src/compile.js";
 import { RECIPES } from "../src/examples.js";
 import { curveSegments, curveSummary, sampleCurve } from "../src/runtime/curve.js";
-import { evaluateNumericFormula, evaluateNumericSample } from "../src/runtime/formula.js";
+import { evaluateFormula, evaluateNumericFormula, evaluateNumericOrNull, evaluateNumericSample } from "../src/runtime/formula.js";
 import { layoutGraph } from "../src/runtime/graphLayout.js";
 import {
   filterTableRows, formatCell, resolveCell, sortTableRows, statusValues,
@@ -53,13 +53,20 @@ test("graph layout is deterministic, bounded, non-overlapping, and survives cycl
 
 test("curve sampling breaks on undefined points and recomputes with scope variables", () => {
   assert.equal(Number.isFinite(evaluateNumericSample("1 / x", { x: 0 })), false);
-  assert.equal(evaluateNumericFormula("1 / x", { x: 0 }, 9), 0);
+  assert.equal(evaluateNumericOrNull("1 / x", { x: 0 }), null);
+  assert.equal(evaluateNumericOrNull("'oops'", {}), null);
+  assert.equal(evaluateNumericFormula("1 / x", { x: 0 }, 9), 9);
+  assert.equal(evaluateFormula("sqrt(4) + pow(2, 3) + round(sin(0) + cos(0) + exp(0) + log(1), 2)", {}), 12);
+  assert.equal(evaluateNumericOrNull("1e-3 * 1000", {}), 1);
   const halves = sampleCurve("1 / x", -1, 1, 5, {});
   assert.equal(halves.length, 5);
   assert.equal(halves[2].y, null);
   const segments = curveSegments(halves);
   assert.equal(segments.length, 2);
   assert.ok(segments.every((segment) => segment.every((point) => point.y !== null)));
+  const evenPole = sampleCurve("1 / x", -1, 1, 80, {});
+  assert.equal(curveSegments(evenPole).length, 2);
+  assert.equal(curveSegments(sampleCurve("sin(x)", -2, 2, 40, {})).length, 1);
   const scaled = sampleCurve("x * gain", 0, 10, 3, { gain: 2 });
   assert.deepEqual(scaled.map((point) => point.y), [0, 10, 20]);
   const renamed = sampleCurve("t * gain", 0, 2, 3, { gain: 2 }, "t");
@@ -104,6 +111,16 @@ test("diagram compiler validates edges and variables and accepts label reference
   const byLabelGraph = byLabel.spec.blocks.find((block) => block.kind === "graph");
   assert.ok(byLabelGraph?.kind === "graph");
   assert.deepEqual(byLabelGraph.edges.map((edge) => [edge.from, edge.to]), [["api", "db"]]);
+
+  const idWins = compileDiagram(DiagramInputSchema.parse({
+    title: "Collisions",
+    nodes: [{ id: "a", label: "A" }, { id: "b", label: "a" }],
+    edges: [{ from: "a", to: "b" }],
+  }));
+  assert.ok(idWins.ok);
+  const collisionGraph = idWins.spec.blocks.find((block) => block.kind === "graph");
+  assert.ok(collisionGraph?.kind === "graph");
+  assert.deepEqual(collisionGraph.edges.map((edge) => [edge.from, edge.to]), [["a", "b"]]);
 
   const failures: Array<[Record<string, unknown>, RegExp]> = [
     [{ nodes: [{ id: "a", label: "A" }], edges: [{ from: "a", to: "missing" }] }, /unknown target/],

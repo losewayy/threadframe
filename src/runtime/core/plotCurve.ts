@@ -39,14 +39,29 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
     canvas.append(line, label);
     return label;
   });
+  const clipId = `iui-clip-${Math.random().toString(36).slice(2, 9)}`;
+  const defs = svgNode("defs");
+  const clip = svgNode("clipPath");
+  clip.setAttribute("id", clipId);
+  const clipRect = svgNode("rect");
+  clipRect.setAttribute("x", String(left));
+  clipRect.setAttribute("y", String(top));
+  clipRect.setAttribute("width", String(right - left));
+  clipRect.setAttribute("height", String(bottom - top));
+  clip.appendChild(clipRect);
+  defs.appendChild(clip);
+  canvas.appendChild(defs);
+  const curveGroup = svgNode("g");
+  curveGroup.setAttribute("clip-path", `url(#${clipId})`);
+  canvas.appendChild(curveGroup);
   const paths = curves.map((curve, index) => {
     const path = svgNode("path", `iui-plot-curve ${curve.tone ?? tones[index % tones.length]}`);
     if (curve.dashed) path.classList.add("dashed");
-    canvas.appendChild(path);
+    curveGroup.appendChild(path);
     return path;
   });
   const pointPath = !curves.length && points.length > 1 ? svgNode("path", "iui-plot-curve primary") : null;
-  if (pointPath) canvas.appendChild(pointPath);
+  if (pointPath) curveGroup.appendChild(pointPath);
   const markers = points.map((point) => {
     const dot = svgNode("circle", "iui-plot-dot");
     dot.setAttribute("r", "4.5");
@@ -132,8 +147,9 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
         ...markerCoords.map((m) => m.my),
       ];
       const upper = block.maxFormula ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? 0) : block.max ?? 0;
-      const min = Math.min(0, ...values);
-      const max = Math.max(1, upper, ...values);
+      let min = block.yMin ?? Math.min(0, ...values);
+      let max = block.yMax ?? Math.max(1, upper, ...values);
+      if (min >= max) max = min + 1;
       const span = max - min || 1;
       const xToPx = (x: number) => left + (x - xMin) / (xMax - xMin || 1) * (right - left);
       const yToPx = (y: number) => bottom - (y - min) / span * (bottom - top);
