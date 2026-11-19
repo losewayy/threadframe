@@ -110,10 +110,9 @@ if (currentStandaloneSpec) {
   renderer.renderPartial(
     {
       title: "ThreadFrame",
-      subtitle: "Waiting for host tool stream...",
       blocks: [],
     },
-    true,
+    false,
   );
 }
 
@@ -130,7 +129,7 @@ function renderToolInput(raw: Record<string, unknown> | undefined, streaming: bo
       subtitle: typeof raw?.subtitle === "string" ? raw.subtitle : undefined,
       badge: typeof raw?.badge === "string" ? raw.badge : undefined,
     });
-    renderer.renderPartial(preview, true, preview.pendingBlockCount);
+    renderer.renderPartial(preview, streaming, streaming ? preview.pendingBlockCount : 0);
   } else {
     renderer.renderPartial(resolveSpecPayload(raw), streaming);
   }
