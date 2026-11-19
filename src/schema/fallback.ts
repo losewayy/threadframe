@@ -250,3 +250,84 @@ export function renderFallbackMarkdown(spec: Partial<UiSpec>): string {
   lines.push("", "_Interactive view rendered via MCP Apps (`ui://threadframe/view.html`) in supported desktop clients._");
   return lines.join("\n").trim();
 }
+
+interface LayoutMetrics {
+  height: number;
+  maxTableRows: number;
+  tabCount: number;
+  clippedGraph: boolean;
+}
+
+function measureBlocks(blocks: UiBlock[], out: LayoutMetrics): number {
+  let total = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    if (i > 0) total += 16;
+    const block = blocks[i];
+    switch (block.kind) {
+      case "title": total += 34; break;
+      case "caption": total += 24; break;
+      case "divider": total += 18; break;
+      case "badge":
+      case "icon": total += 28; break;
+      case "text": total += Math.max(28, Math.ceil(block.text.length / 72) * 24); break;
+      case "controls": total += block.controls.length * 52 + (block.metrics?.length ? 56 : 0); break;
+      case "stats": total += Math.ceil(block.items.length / 3) * 70; break;
+      case "chart": total += block.bars.length * 36 + 32; break;
+      case "plot": total += 250; break;
+      case "svg": total += Math.min(block.height, 360) + 28; break;
+      case "graph":
+        if (block.nodes.length > 6) out.clippedGraph = true;
+        total += Math.min(256, block.nodes.length * 46) + (block.title ? 28 : 0);
+        break;
+      case "table":
+        out.maxTableRows = Math.max(out.maxTableRows, block.rows.length);
+        total += (block.filter ? 44 : 0) + 38 + block.rows.length * 38 + (block.caption ? 24 : 0);
+        break;
+      case "choices": total += block.options.length * 60 + 16; break;
+      case "compare": total += 40 + block.rows.length * 40; break;
+      case "checklist": total += 36 + block.items.length * 42; break;
+      case "timeline": total += block.steps.length * 58; break;
+      case "architecture": total += block.layers.length * 82; break;
+      case "callout": total += 64 + (block.items?.length ?? 0) * 22; break;
+      case "code": total += 40 + (block.code ?? block.template ?? "").split("\n").length * 20; break;
+      case "box": total += measureBlocks(block.children, out) + 28; break;
+      case "grid": {
+        const cols = Array.from({ length: block.columns }, () => 0);
+        block.children.forEach((child, idx) => { cols[idx % block.columns] += measureBlocks([child], out); });
+        total += Math.max(...cols);
+        break;
+      }
+      case "tabs": {
+        out.tabCount = Math.max(out.tabCount, block.tabs.length);
+        const active = block.tabs.find((tab) => tab.id === block.defaultTab) ?? block.tabs[0];
+        total += 42 + (active ? measureBlocks(active.children, out) : 0);
+        break;
+      }
+      case "accordion": {
+        let openHeight = 0;
+        for (const item of block.items) {
+          if (item.defaultOpen) openHeight += measureBlocks(item.children, out) + 12;
+        }
+        total += block.items.length * 46 + openHeight;
+        break;
+      }
+    }
+  }
+  return total;
+}
+
+/** Estimates rendered card height and dense-content overflow for caller feedback. */
+export function formatLayoutSummary(spec: UiSpec): string {
+  const metrics: LayoutMetrics = { height: 0, maxTableRows: 0, tabCount: 0, clippedGraph: false };
+  const chrome = (spec.subtitle ? 72 : 52) + (spec.actions?.length ? 46 : 0) + 42;
+  const est = Math.round((chrome + measureBlocks(spec.blocks, metrics)) / 10) * 10;
+  const notes: string[] = [];
+  if (metrics.tabCount > 1) notes.push(`${metrics.tabCount} tabs`);
+  if (metrics.maxTableRows > 0) notes.push(`table ${metrics.maxTableRows} rows`);
+  if (metrics.clippedGraph) notes.push("graph viewport caps at 256px height");
+  const detail = notes.length ? `${notes.join(", ")}; ` : "";
+  if (est <= 480 && !metrics.clippedGraph) {
+    return `Layout: ~${est}px estimated (${detail}fits ~450px chat comfort height).`;
+  }
+  return `Layout: ~${est}px estimated (${detail}exceeds ~450px comfort height and will likely scroll—consider <tabs>, <accordion>, or fewer rows).`;
+}

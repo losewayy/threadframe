@@ -1,12 +1,13 @@
 import { z } from "zod";
 import type { CompileResult } from "../compile.js";
+import { slugify } from "../compile.js";
 import { evaluateFormula, formulaIdentifiers, type VarScope } from "../runtime/formula.js";
 import { decodeInlineEntities, parseInlineText } from "./inlineText.js";
 import {
   parseMarkup, MarkupSyntaxError, type MarkupAttribute, type MarkupElement, type MarkupNode,
 } from "./markupSyntax.js";
 import {
-  markupTags, atomicTags, tagUsageHint, type BlockLevel, type ChildRule, type MarkupTag,
+  markupTags, atomicTags, autoIdTags, tagUsageHint, type BlockLevel, type ChildRule, type MarkupTag,
 } from "./markupTags.js";
 import {
   InnerBoxBlockSchema, UiSpecSchema, choiceAssignmentIssues, declaredControls, walkBlocks,
@@ -234,7 +235,7 @@ class MarkupCompiler {
     return this.record(all[0].offset, `${all.map((item) => item.message).join("; ")}. ${hint}`);
   }
 
-  private element(element: MarkupElement, tag: MarkupTag): Fields | undefined {
+  private element(element: MarkupElement, tag: MarkupTag, usedIds?: Set<string>, index = 0): Fields | undefined {
     if (!element.closed && !tag.blocks && !tag.list) return;
     const { fields, problems } = this.collectAttributes(element, tag);
     const broken = new Set(problems.map((problem) => problem.field).filter((field): field is string => !!field));
@@ -271,6 +272,7 @@ class MarkupCompiler {
       }
     }
     if (controlTags.has(element.name)) this.controlDefaults(element, fields);
+    if (autoIdTags.has(element.name)) this.ensureAutoId(element.name, fields, usedIds, index);
     if (element.name === "row") fields.values ??= {};
     if (element.name === "code" && typeof fields.template === "string") {
       for (const match of fields.template.matchAll(/{{\s*([A-Za-z_]\w*)\s*}}/g)) {
@@ -283,8 +285,24 @@ class MarkupCompiler {
     return this.record(all[0].offset, `${all.map((item) => item.message).join("; ")}. ${hint}`);
   }
 
+  private ensureAutoId(tagName: string, fields: Fields, usedIds: Set<string> | undefined, index: number): void {
+    if (typeof fields.id === "string" && fields.id.length) {
+      usedIds?.add(fields.id);
+      return;
+    }
+    if (fields.id !== undefined) return;
+    const base = slugify(String(fields.label ?? fields.title ?? ""), `${tagName}_${index + 1}`);
+    let candidate = base;
+    let suffix = 2;
+    while (usedIds?.has(candidate)) candidate = `${base}_${suffix++}`;
+    usedIds?.add(candidate);
+    fields.id = candidate;
+  }
+
   private children(element: MarkupElement, fields: Fields, rules: ChildRule[]): void {
     const localColumns: FormulaSource[] = [];
+    const usedIds = new Set<string>();
+    let childIndex = 0;
     for (const child of element.children) {
       if (child.kind === "text" && !child.value.trim()) continue;
       this.preview(() => {
@@ -292,7 +310,7 @@ class MarkupCompiler {
         const rule = rules.find((candidate) => candidate.tag === child.name);
         if (!rule) return fail(child.offset, `<${element.name}> accepts ${rules.map(({ tag }) => `<${tag}>`).join(", ")}; move or rename <${child.name}>`);
         const firstFormula = this.formulas.length;
-        const value = this.element(child, this.definition(child));
+        const value = this.element(child, this.definition(child), usedIds, childIndex++);
         if (!value) return;
         const recent = this.formulas.slice(firstFormula);
         if (child.name === "curve") recent.forEach((formula) => { formula.locals = [String(fields.xVariable ?? "x")]; });

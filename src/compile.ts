@@ -118,7 +118,7 @@ export interface CompileFailure {
 
 export type CompileResult = CompileSuccess | CompileFailure;
 
-function slugify(label: string, fallback: string): string {
+export function slugify(label: string, fallback: string): string {
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   const base = slug || fallback;
   return /^[0-9]/.test(base) ? `v_${base}` : base;

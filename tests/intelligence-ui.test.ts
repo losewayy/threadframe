@@ -508,6 +508,7 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
         if (scenario.name === "Native") {
           assert.equal(result.structuredContent?.title, "Markup scale");
           assert.match(result.content[0].text, /Total 4/);
+          assert.match(result.content[0].text, /Layout: ~\d+px estimated/);
           const listing = await client.request("tools/list", {});
           const tools = z.array(z.object({
             name: z.string(), inputSchema: z.record(z.string(), z.unknown()),

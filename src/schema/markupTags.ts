@@ -37,8 +37,8 @@ const examples: Record<string, string> = {
   grid: '<grid columns={2}><box><text>Left</text></box><box><text>Right</text></box></grid>',
   tabs: '<tabs><tab label="Main"><text>Body</text></tab></tabs>',
   tab: '<tab label="Overview"><text>Content</text></tab>',
-  accordion: '<accordion><section label="Details"><text>More</text></section></accordion>',
-  section: '<section label="Details"><text>More</text></section>',
+  accordion: '<accordion><section title="Details"><text>More</text></section></accordion>',
+  section: '<section title="Details"><text>More</text></section>',
   slider: '<slider id="n" label="Count" min={1} max={10} default={3}/>',
   toggle: '<toggle id="flag" label="Enable" default={true}/>',
   select: '<select id="mode" label="Mode"><option value="fast"/><option value="safe"/></select>',
@@ -56,25 +56,25 @@ const examples: Record<string, string> = {
   row: '<row><cell key="name" value="Item"/></row>',
   cell: '<cell key="name" value="Item"/>',
   filter: '<filter key="name" placeholder="Search..."/>',
-  choices: '<choices><choice id="opt_a" label="Option A"/></choices>',
-  choice: '<choice id="opt_a" label="Option A" summary="Recommended"/>',
+  choices: '<choices><choice label="Option A"/></choices>',
+  choice: '<choice label="Option A" description="Recommended"/>',
   set: '<set var="mode" value="fast"/>',
   compare: '<compare><option value="A"/><option value="B"/><criterion label="Cost"><option value="Low"/><option value="High"/></criterion></compare>',
   criterion: '<criterion label="Latency"><option value="12 ms"/><option value="40 ms"/></criterion>',
-  checklist: '<checklist><item label="Verify build" done={true}/></checklist>',
-  item: '<item label="Run tests" done={false}/>',
+  checklist: '<checklist><item label="Verify build" checked={true}/></checklist>',
+  item: '<item label="Run tests" checked={false}/>',
   timeline: '<timeline><step label="Build" status="done"/></timeline>',
   step: '<step label="Verify" status="active" detail="Run tests"/>',
-  architecture: '<architecture><layer label="UI"><component label="Card"/></layer></architecture>',
-  layer: '<layer label="Runtime"><component label="Compiler"/></layer>',
+  architecture: '<architecture><layer layer="UI"><component label="Card" role="View"/></layer></architecture>',
+  layer: '<layer layer="Runtime"><component label="Compiler" role="Validator"/></layer>',
   component: '<component label="Compiler" role="Validator"/>',
-  callout: '<callout title="Note" tone="accent">Details here</callout>',
+  callout: '<callout title="Note" tone="info">Details here</callout>',
   code: '<code language="ts">const x = 1;</code>',
   button: '<button action="send_message" label="Apply" promptTemplate="Apply choice"/>',
-  text: '<text>Use **bold** and {var}.</text>',
+  text: '<text>Use **bold** and {n * 2}.</text>',
   title: '<title>Heading</title>',
   caption: '<caption>Secondary note</caption>',
-  badge: '<badge label="Ready" tone="success"/>',
+  badge: '<badge tint="success">Ready</badge>',
   icon: '<icon name="arrow-down"/>',
 };
 
@@ -90,7 +90,7 @@ const tags = new Map<string, MarkupTag>([
   ["tabs", { schema: TabsBlockSchema, block: true, list: [{ tag: "tab", field: "tabs" }] }],
   ["tab", { schema: TabsBlockSchema.shape.tabs.element, blocks: "panel" }],
   ["accordion", { schema: AccordionBlockSchema, block: true, list: [{ tag: "section", field: "items" }] }],
-  ["section", { schema: AccordionBlockSchema.shape.items.element, blocks: "panel" }],
+  ["section", { schema: AccordionBlockSchema.shape.items.element, blocks: "panel", alias: { label: "title" } }],
   ["controls", { schema: ControlsBlockSchema, block: true, list: [...controlItems, { tag: "metric", field: "metrics" }] }],
   ["slider", { schema: SliderControlSchema, alias: { default: "defaultValue" } }],
   ["toggle", { schema: ToggleControlSchema, alias: { default: "defaultValue" } }],
@@ -118,13 +118,13 @@ const tags = new Map<string, MarkupTag>([
   ["choice", { schema: ChoiceOptionSchema, list: [{ tag: "set", field: "setVars", key: "var", value: "value" }] }],
   ["set", { schema: z.object({ var: z.string().min(1), value: scalar }) }],
   ["compare", { schema: CompareBlockSchema, block: true, list: [value("option", "columns"), { tag: "criterion", field: "rows" }] }],
-  ["criterion", { schema: CompareRowSchema, list: [value("option", "values")] }],
+  ["criterion", { schema: CompareRowSchema, list: [value("option", "values")], alias: { label: "criterion" } }],
   ["checklist", { schema: ChecklistBlockSchema, block: true, list: [{ tag: "item", field: "items" }] }],
-  ["item", { schema: ChecklistItemSchema }],
+  ["item", { schema: ChecklistItemSchema, alias: { done: "checked" } }],
   ["timeline", { schema: TimelineBlockSchema, block: true, list: [{ tag: "step", field: "steps" }] }],
-  ["step", { schema: TimelineStepSchema }],
+  ["step", { schema: TimelineStepSchema, alias: { label: "title" } }],
   ["architecture", { schema: ArchitectureBlockSchema, block: true, list: [{ tag: "layer", field: "layers" }] }],
-  ["layer", { schema: ArchitectureLayerSchema, list: [{ tag: "component", field: "nodes" }] }],
+  ["layer", { schema: ArchitectureLayerSchema, list: [{ tag: "component", field: "nodes" }], alias: { label: "layer" } }],
   ["component", { schema: ArchitectureNodeSchema }],
   ["callout", { schema: CalloutBlockSchema, block: true, body: "literal" }],
   ["code", { schema: CodeBlockSchema, block: true, body: "code" }],
@@ -154,6 +154,7 @@ for (const [name, tag] of tags) {
 }
 
 const controlDefaulted = new Set(["min", "max", "defaultValue"]);
+export const autoIdTags = new Set(["tab", "section", "choice", "item", "component", "node", "step"]);
 
 /** Summarizes valid attributes, required fields, and a minimal example for an element tag. */
 export function tagUsageHint(name: string, tag: MarkupTag): string {
@@ -170,7 +171,8 @@ export function tagUsageHint(name: string, tag: MarkupTag): string {
   for (const [field, schema] of Object.entries(tag.schema.shape)) {
     if (hidden.has(field)) continue;
     const attr = toAttr.get(field) ?? field;
-    const required = !schema.isOptional() && !(controlDefaulted.has(field) && ["slider", "toggle", "select"].includes(name));
+    const autoDefaulted = (field === "id" && autoIdTags.has(name)) || (controlDefaulted.has(field) && ["slider", "toggle", "select"].includes(name));
+    const required = !schema.isOptional() && !autoDefaulted;
     attrs.push(required ? `${attr} (required)` : attr);
   }
   const attrNote = attrs.length

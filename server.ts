@@ -8,7 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { renderFallbackMarkdown } from "./src/schema/fallback.js";
+import { renderFallbackMarkdown, formatLayoutSummary } from "./src/schema/fallback.js";
 import { choiceAssignmentIssues } from "./src/schema/uiSpec.js";
 import type { UiSpec } from "./src/schema/uiSpec.js";
 import { detectClientAdapter } from "./src/clientAdapter.js";
@@ -77,7 +77,8 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
       }
     }
     const markdown = renderFallbackMarkdown(spec);
-    if (mode === "mcp-apps") return { content: [{ type: "text" as const, text: markdown }], structuredContent: spec };
+    const layout = formatLayoutSummary(spec);
+    if (mode === "mcp-apps") return { content: [{ type: "text" as const, text: `${markdown}\n\n${layout}` }], structuredContent: spec };
     let hint = `Client mode: ${mode}. Markdown fallback returned.`;
     if (embedPath !== undefined) {
       try {
@@ -86,10 +87,10 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
         const uri = await writeEmbedFile(embedPath, html, true);
         hint = `Client mode: ${mode}. Embed HTML written: ${uri}`;
       } catch (error) {
-        return { isError: true, content: [{ type: "text" as const, text: `${markdown}\n\nEmbed export failed: ${(error as Error).message}` }] };
+        return { isError: true, content: [{ type: "text" as const, text: `${markdown}\n\n${layout}\n\nEmbed export failed: ${(error as Error).message}` }] };
       }
     } else if (mode === "antigravity") hint += " Pass embedPath with an artifact .html path through local --stdio to generate an embedded page.";
-    return { content: [{ type: "text" as const, text: `${markdown}\n\n${hint}` }], structuredContent: spec };
+    return { content: [{ type: "text" as const, text: `${markdown}\n\n${layout}\n\n${hint}` }], structuredContent: spec };
   };
 
   const compileError = (issues: string[]) => ({
@@ -106,7 +107,7 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
         'Use when a custom interactive card adds clarity—such as plotting parameter-linked curves, presenting a filterable/sortable table, or combining live formulas with icons and tinted boxes—when present_calculator, present_decision, or present_diagram does not fit.',
         "Do not call for factual Q&A, a single command output, or isolated error debugging.",
         'Example markup: <box tint="accent" padding="md"><slider id="x" label="Amount" min={1} max={10} default={3}/><text>**Total** {x * 2}</text></box>.',
-        'Data & atom tags: <title>, <caption>, <badge label="..."/>, <divider/>, <icon name="arrow-down"/>; <plot mode="line" xVariable="x" xMin={0} xMax={10}><curve label="Y" formula={x * 2}/><point label="Now" x={4} y={8}/></plot>; <graph><node id="a" label="A"/><node id="b" label="B"/><edge from="a" to="b"/></graph>; <table><filter key="k" placeholder="Filter"/><column key="k" label="Name" sortable/><row><cell key="k" value="v"/></row></table>.',
+        'Data & atom tags: <title>Title</title>, <caption>Note</caption>, <badge tint="success">Ready</badge>, <divider/>, <icon name="arrow-down"/>; <plot mode="line" xVariable="x" xMin={0} xMax={10}><curve label="Y" formula={x * 2}/><point label="Now" x={4} y={8}/></plot>; <graph><node id="a" label="A"/><node id="b" label="B"/><edge from="a" to="b"/></graph>; <table><filter key="k" placeholder="Filter"/><column key="k" label="Name" sortable/><row><cell key="k" value="v"/></row></table>.',
         "Nesting rules: <tabs> and <accordion> are top-level only and cannot nest; <filter> belongs only inside <table>; inner <box> accepts only leaf atoms (<title>, <caption>, <text>, <badge>, <icon>, <stat>, <divider/>).",
         "Formula rules: <stat> formula accepts numbers or strings; <metric>, <bar>, <curve>, <point> (xFormula/yFormula/formula), and <node valueFormula> require numeric expressions.",
         "Quote strings; put numbers, booleans, and formulas in braces. Text supports **bold**, inline code, and live {expressions} over control IDs. No JavaScript, HTML, CSS, or event attributes.",

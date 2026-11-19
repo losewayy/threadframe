@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MARKUP_RECIPES } from "../src/examples.js";
-import { renderFallbackMarkdown } from "../src/schema/fallback.js";
+import { renderFallbackMarkdown, formatLayoutSummary } from "../src/schema/fallback.js";
 import { compileMarkup, parsePartialMarkup } from "../src/schema/markup.js";
+import { markupTags } from "../src/schema/markupTags.js";
 import { UiSpecSchema } from "../src/schema/uiSpec.js";
 
 test("markup compiles to the same UiSpec as native controls, atoms, and plots", () => {
@@ -152,4 +153,77 @@ test("markup accepts literal code and text through safe rendering, and rejects e
   assert.doesNotMatch(markdown, /<(?:script|img)\b/i);
   assert.match(markdown, /&lt;img/);
   assert.match(markdown, /`<span>`/);
+});
+
+test("markup derives omitted structural ids, accepts natural aliases, and compiles every tag example", () => {
+  const auto = compileMarkup({
+    markup: `
+      <tabs>
+        <tab label="Overview"><text>One</text></tab>
+        <tab label="中文标签"><text>Two</text></tab>
+      </tabs>
+      <accordion><section label="Details"><text>Inside</text></section></accordion>
+      <choices><choice label="Fast"/></choices>
+      <checklist><item label="Done" done={true}/></checklist>
+      <architecture><layer label="UI"><component label="Card" role="View"/></layer></architecture>
+      <compare><option value="A"/><option value="B"/><criterion label="Speed"><option value="Fast"/><option value="Slow"/></criterion></compare>
+    `,
+  });
+  assert.ok(auto.ok, auto.ok ? "" : auto.issues.join("\n"));
+  const [tabs, accordion, choices, checklist, arch, compare] = auto.spec.blocks;
+  assert.ok(tabs.kind === "tabs" && tabs.tabs[0].id === "overview" && tabs.tabs[1].id === "tab_2");
+  assert.ok(accordion.kind === "accordion" && accordion.items[0].id === "details" && accordion.items[0].title === "Details");
+  assert.ok(choices.kind === "choices" && choices.options[0].id === "fast");
+  assert.ok(checklist.kind === "checklist" && checklist.items[0].id === "done" && checklist.items[0].checked === true);
+  assert.ok(arch.kind === "architecture" && arch.layers[0].layer === "UI" && arch.layers[0].nodes[0].id === "card");
+  assert.ok(compare.kind === "compare" && compare.rows[0].criterion === "Speed");
+
+  const wrap = (name: string, example: string): string => {
+    const context = '<slider id="n" label="N" min={1} max={10} default={2}/><toggle id="mode" label="Mode" default={true}/>';
+    switch (name) {
+      case "tab": return `<tabs>${example}</tabs>`;
+      case "section": return `<accordion>${example}</accordion>`;
+      case "metric": return `<controls><slider id="n" label="N"/>${example}</controls>`;
+      case "stat": return `<stats>${example}</stats>`;
+      case "bar": return `${context}<chart>${example}</chart>`;
+      case "curve":
+      case "point": return `<plot mode="line" xVariable="x" xMin={0} xMax={10}>${example}</plot>`;
+      case "node": return `<graph>${example}</graph>`;
+      case "edge": return `<graph><node id="a" label="A"/><node id="b" label="B"/>${example}</graph>`;
+      case "column": return `<table>${example}<row><cell key="name" value="A"/></row></table>`;
+      case "row": return `<table><column key="name" label="Name"/>${example}</table>`;
+      case "cell": return `<table><column key="name" label="Name"/><row>${example}</row></table>`;
+      case "filter": return `<table>${example}<column key="name" label="Name"/><row><cell key="name" value="A"/></row></table>`;
+      case "choice": return `<choices>${example}</choices>`;
+      case "set": return `<select id="mode" label="Mode"><option value="fast"/><option value="safe"/></select><choices><choice label="Pick">${example}</choice></choices>`;
+      case "criterion": return `<compare><option value="A"/><option value="B"/>${example}</compare>`;
+      case "item": return `<checklist>${example}</checklist>`;
+      case "step": return `<timeline>${example}</timeline>`;
+      case "layer": return `<architecture>${example}</architecture>`;
+      case "component": return `<architecture><layer layer="Runtime">${example}</layer></architecture>`;
+      case "button": return `<text>Hi</text>${example}`;
+      case "slider":
+      case "toggle":
+      case "select": return example;
+      default: return `${context}${example}`;
+    }
+  };
+  for (const [name, tag] of markupTags) {
+    if (!tag.example) continue;
+    const compiled = compileMarkup({ markup: wrap(name, tag.example) });
+    assert.ok(compiled.ok, `Example for <${name}> failed: ${compiled.ok ? "" : compiled.issues.join("; ")}`);
+  }
+});
+
+test("formatLayoutSummary flags compact cards vs overflowing multi-row tables", () => {
+  const compact = compileMarkup({ markup: '<box><text>Hello</text></box>' });
+  assert.ok(compact.ok);
+  assert.match(formatLayoutSummary(compact.spec), /fits ~450px chat comfort height/);
+
+  const rows = Array.from({ length: 18 }, (_, i) => `<row><cell key="k" value="Row ${i}"/></row>`).join("");
+  const dense = compileMarkup({ markup: `<table><column key="k" label="K"/>${rows}</table>` });
+  assert.ok(dense.ok);
+  const summary = formatLayoutSummary(dense.spec);
+  assert.match(summary, /table 18 rows/);
+  assert.match(summary, /exceeds ~450px comfort height/);
 });
