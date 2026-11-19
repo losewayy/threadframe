@@ -10,6 +10,8 @@
 
 ![ThreadFrame 交互式上线向导演示](docs/demo.gif)
 
+![ThreadFrame 在 AI 对话气泡中的真实内嵌效果](docs/in-chat-preview.png)
+
 ## 快速开始
 
 需要 **Node.js 22+** 和 **pnpm 10.15.1**。

@@ -10,6 +10,8 @@
 
 ![ThreadFrame interactive launch-kit demo](docs/demo.gif)
 
+![ThreadFrame embedded inline inside an AI chat](docs/in-chat-preview.png)
+
 ## Quick Start
 
 Requires **Node.js 22+** and **pnpm 10.15.1**.

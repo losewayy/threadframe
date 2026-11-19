@@ -68,6 +68,7 @@
     "AGENTS.md"
   ],
   "screenshots": [
-    "docs/demo.gif"
+    "docs/demo.gif",
+    "docs/in-chat-preview.png"
   ]
 }
