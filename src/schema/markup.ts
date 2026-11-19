@@ -5,7 +5,9 @@ import { decodeInlineEntities, parseInlineText } from "./inlineText.js";
 import {
   parseMarkup, MarkupSyntaxError, type MarkupAttribute, type MarkupElement, type MarkupNode,
 } from "./markupSyntax.js";
-import { markupTags, atomicTags, type BlockLevel, type ChildRule, type MarkupTag } from "./markupTags.js";
+import {
+  markupTags, atomicTags, tagUsageHint, type BlockLevel, type ChildRule, type MarkupTag,
+} from "./markupTags.js";
 import {
   InnerBoxBlockSchema, UiSpecSchema, choiceAssignmentIssues, declaredControls, walkBlocks,
   type ControlItem, type PartialUiSpecResult, type UiBlock, type UiSpec,
@@ -30,9 +32,15 @@ interface FormulaSource {
   locals?: string[];
 }
 
+const MAX_ISSUES = 12;
 const controlTags = new Set(["slider", "toggle", "select"]);
 const formulaField = (name: string) => name === "formula" || name.endsWith("Formula");
 const fail = (offset: number, message: string): never => { throw new MarkupSyntaxError(message, offset); };
+
+function formatOffset(source: string, offset: number, message: string): string {
+  const lines = source.slice(0, offset).split(/\r\n|\n|\r/);
+  return `Line ${lines.length}, column ${lines.at(-1)!.length + 1}: ${message}`;
+}
 
 function attributeValue(attribute: MarkupAttribute, field: string, isFormula: boolean): unknown {
   if (attribute.kind === "quoted") return decodeInlineEntities(attribute.value);
@@ -71,21 +79,28 @@ function readBody(element: MarkupElement): { text: string; offset: number } {
 
 class MarkupCompiler {
   readonly actions: Action[] = [];
+  readonly issues: string[] = [];
   pending = false;
   private readonly formulas: FormulaSource[] = [];
   private readonly controls = new Set<string>();
   private readonly assignments = new Map<string, number>();
 
-  constructor(private readonly partial: boolean) {}
+  constructor(private readonly partial: boolean, private readonly source = "") {}
+
+  private record(offset: number, message: string): undefined {
+    if (this.partial) fail(offset, message);
+    if (this.issues.length < MAX_ISSUES) this.issues.push(formatOffset(this.source, offset, message));
+    return undefined;
+  }
 
   frame(nodes: MarkupNode[], input: Partial<MarkupInput>): UiSpec {
     nodes = nodes.filter((node) => node.kind !== "text" || node.value.trim());
     const first = nodes[0];
     let metadata: Fields = {};
     if (first?.kind === "element" && first.name === "frame") {
-      if (nodes.length > 1) fail(nodes[1].offset, "put all blocks inside <frame>, or omit the wrapper");
+      if (nodes.length > 1) this.record(nodes[1].offset, "put all blocks inside <frame>, or omit the wrapper");
       const frameTag = markupTags.get("frame")!;
-      metadata = this.validateFields(first, frameTag, this.attributes(first, frameTag));
+      metadata = this.validateElementAttributes(first, frameTag) ?? {};
       nodes = first.children;
     }
     const subtitle = input.subtitle ?? (metadata.subtitle as string | undefined);
@@ -102,7 +117,11 @@ class MarkupCompiler {
     try {
       return build();
     } catch (error) {
-      if (!this.partial || !(error instanceof MarkupSyntaxError)) throw error;
+      if (!(error instanceof MarkupSyntaxError)) throw error;
+      if (!this.partial) {
+        this.record(error.offset, error.message);
+        return undefined;
+      }
       this.pending = true;
     }
   }
@@ -157,39 +176,84 @@ class MarkupCompiler {
   }
 
   private definition(element: MarkupElement): MarkupTag {
-    return markupTags.get(element.name) ?? fail(element.offset, `unknown tag <${element.name}>; see threadframe://examples/markup`);
+    return markupTags.get(element.name) ?? fail(element.offset, `unknown tag <${element.name}>; check spelling or read threadframe://examples/markup`);
   }
 
-  private attributes(element: MarkupElement, tag: MarkupTag): Fields {
+  private collectAttributes(element: MarkupElement, tag: MarkupTag): {
+    fields: Fields;
+    problems: Array<{ offset: number; message: string; field?: string }>;
+  } {
     const fields: Fields = { ...tag.fixed, ...(tag.block || controlTags.has(element.name) ? { kind: element.name } : {}) };
+    const problems: Array<{ offset: number; message: string; field?: string }> = [];
     for (const [name, attribute] of element.attrs) {
       const field = tag.alias && Object.hasOwn(tag.alias, name) ? tag.alias[name] : name;
       const childField = (tag.blocks && field === "children") || tag.list?.some((rule) => rule.field === field);
       if (!Object.hasOwn(tag.schema.shape, field) || Object.hasOwn(fields, field) || childField || (tag.body === "inline" && field === "text")) {
-        fail(attribute.offset, `<${element.name}>: unexpected or repeated attribute "${name}"`);
+        problems.push({ offset: attribute.offset, message: `<${element.name}>: unexpected or repeated attribute "${name}"`, field });
+        continue;
       }
       const where = `<${element.name}>.${name}`;
-      fields[field] = attributeValue(attribute, where, formulaField(field));
-      if (formulaField(field)) this.formulas.push({ expression: String(fields[field]), field: where, offset: attribute.offset });
+      try {
+        fields[field] = attributeValue(attribute, where, formulaField(field));
+        if (formulaField(field)) this.formulas.push({ expression: String(fields[field]), field: where, offset: attribute.offset });
+      } catch (error) {
+        if (!(error instanceof MarkupSyntaxError)) throw error;
+        problems.push({ offset: error.offset, message: error.message, field });
+      }
     }
-    return fields;
+    return { fields, problems };
+  }
+
+  private schemaProblems(element: MarkupElement, tag: MarkupTag, fields: Fields, brokenFields: Set<string>): Array<{ offset: number; message: string }> {
+    const parsed = tag.schema.safeParse(fields);
+    if (parsed.success) return [];
+    const problems: Array<{ offset: number; message: string }> = [];
+    const seen = new Set<string>();
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join(".");
+      const top = String(issue.path[0] ?? "");
+      if (seen.has(key) || (top && brokenFields.has(top))) continue;
+      seen.add(key);
+      const alias = top === "defaultValue" ? element.attrs.get("default") : top === "column" ? element.attrs.get("key") : undefined;
+      const at = element.attrs.get(top) ?? alias;
+      const displayPath = issue.path.map((part, index) => (index === 0 && part === "column" && !element.attrs.has("column") ? "key" : String(part))).join(".");
+      problems.push({
+        offset: at?.offset ?? element.offset,
+        message: `<${element.name}>${displayPath ? `.${displayPath}` : ""}: ${issue.message}`,
+      });
+    }
+    return problems;
+  }
+
+  private validateElementAttributes(element: MarkupElement, tag: MarkupTag): Fields | undefined {
+    const { fields, problems } = this.collectAttributes(element, tag);
+    const broken = new Set(problems.map((problem) => problem.field).filter((field): field is string => !!field));
+    const all = [...problems, ...this.schemaProblems(element, tag, fields, broken)];
+    if (!all.length) return tag.schema.parse(fields);
+    const hint = tagUsageHint(element.name, tag);
+    return this.record(all[0].offset, `${all.map((item) => item.message).join("; ")}. ${hint}`);
   }
 
   private element(element: MarkupElement, tag: MarkupTag): Fields | undefined {
     if (!element.closed && !tag.blocks && !tag.list) return;
-    const fields = this.attributes(element, tag);
+    const { fields, problems } = this.collectAttributes(element, tag);
+    const broken = new Set(problems.map((problem) => problem.field).filter((field): field is string => !!field));
+    const structural: Array<{ offset: number; message: string }> = [];
     if (tag.body) {
       const body = readBody(element);
       const field = tag.body === "inline" ? "text" : tag.body === "literal" ? "body" : "code";
       if (tag.body === "inline") {
-        if (!body.text) fail(element.offset, `<${element.name}> needs text between its tags`);
-        this.inline(body.text, body.offset, `<${element.name}> text`);
-        fields.text = body.text;
+        if (!body.text) structural.push({ offset: element.offset, message: `<${element.name}> needs text between its tags` });
+        else {
+          this.inline(body.text, body.offset, `<${element.name}> text`);
+          fields.text = body.text;
+        }
       } else if (body.text) {
         if (Object.hasOwn(fields, field) || (tag.body === "code" && Object.hasOwn(fields, "template"))) {
-          fail(body.offset, `<${element.name}>: supply either body text or a ${field} attribute`);
+          structural.push({ offset: body.offset, message: `<${element.name}>: supply either body text or a ${field} attribute` });
+        } else {
+          fields[field] = decodeInlineEntities(body.text);
         }
-        fields[field] = decodeInlineEntities(body.text);
       }
     } else if (tag.blocks) {
       fields.children = this.blocks(element.children, tag.blocks);
@@ -197,7 +261,14 @@ class MarkupCompiler {
       this.children(element, fields, tag.list);
     } else {
       const unexpected = element.children.find((node) => node.kind === "element" || node.value.trim());
-      if (unexpected) fail(unexpected.offset, `<${element.name}> has no children; close it with />`);
+      if (unexpected) {
+        structural.push({
+          offset: unexpected.offset,
+          message: unexpected.kind === "text"
+            ? `<${element.name}> takes attributes only, not inner text; close it with />`
+            : `<${element.name}> takes no child tags; close it with />`,
+        });
+      }
     }
     if (controlTags.has(element.name)) this.controlDefaults(element, fields);
     if (element.name === "row") fields.values ??= {};
@@ -206,19 +277,10 @@ class MarkupCompiler {
         this.formulas.push({ expression: match[1], field: "<code>.template", offset: element.attrs.get("template")!.offset });
       }
     }
-    return this.validateFields(element, tag, fields);
-  }
-
-  private validateFields(element: MarkupElement, tag: MarkupTag, fields: Fields): Fields {
-    const parsed = tag.schema.safeParse(fields);
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      const [field] = issue.path;
-      const alias = field === "defaultValue" ? element.attrs.get("default") : undefined;
-      const at = element.attrs.get(String(field)) ?? alias;
-      return fail(at?.offset ?? element.offset, `<${element.name}>${issue.path.length ? `.${issue.path.join(".")}` : ""}: ${issue.message}`);
-    }
-    return parsed.data;
+    const all = [...problems, ...structural, ...this.schemaProblems(element, tag, fields, broken)];
+    if (!all.length) return tag.schema.parse(fields);
+    const hint = tagUsageHint(element.name, tag);
+    return this.record(all[0].offset, `${all.map((item) => item.message).join("; ")}. ${hint}`);
   }
 
   private children(element: MarkupElement, fields: Fields, rules: ChildRule[]): void {
@@ -331,41 +393,36 @@ class MarkupCompiler {
     );
     for (const formula of this.formulas) {
       const issue = formulaIssue(formula, scope);
-      if (issue) fail(formula.offset, `${formula.field}: ${issue}`);
+      if (issue) this.record(formula.offset, `${formula.field}: ${issue}`);
     }
-    const issue = choiceAssignmentIssues(spec.blocks)[0];
-    if (issue) {
+    for (const issue of choiceAssignmentIssues(spec.blocks)) {
       const location = [...this.assignments].find(([field]) => issue.startsWith(field));
-      fail(location?.[1] ?? 0, issue);
+      this.record(location?.[1] ?? 0, issue);
     }
   }
-}
-
-function describeIssue(source: string, error: MarkupSyntaxError): string {
-  const lines = source.slice(0, error.offset).split(/\r\n|\n|\r/);
-  return `Line ${lines.length}, column ${lines.at(-1)!.length + 1}: ${error.message}`;
 }
 
 export function compileMarkup(input: MarkupInput): CompileResult {
   try {
     if (input.markup.length > MAX_MARKUP) fail(MAX_MARKUP, `keep markup under ${MAX_MARKUP} characters`);
-    const compiler = new MarkupCompiler(false);
+    const compiler = new MarkupCompiler(false, input.markup);
     const spec = compiler.frame(parseMarkup(input.markup).nodes, input);
+    if (compiler.issues.length) return { ok: false, issues: compiler.issues };
     if (!spec.blocks.length) fail(0, "add at least one display block, such as <text>…</text>");
     const actions = input.statePath !== undefined
       ? [{ kind: "save_state" as const, label: "Apply & remember", statePath: input.statePath }, ...compiler.actions]
       : compiler.actions;
     if (actions.length) spec.actions = actions;
     compiler.validate(spec);
+    if (compiler.issues.length) return { ok: false, issues: compiler.issues };
     const parsed = UiSpecSchema.safeParse(spec);
     if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      return fail(0, `${issue.path.join(".")}: ${issue.message}`);
+      return { ok: false, issues: parsed.error.issues.slice(0, MAX_ISSUES).map((issue) => formatOffset(input.markup, 0, `${issue.path.join(".")}: ${issue.message}`)) };
     }
     return { ok: true, spec: parsed.data };
   } catch (error) {
     if (!(error instanceof MarkupSyntaxError)) throw error;
-    return { ok: false, issues: [describeIssue(input.markup, error)] };
+    return { ok: false, issues: [formatOffset(input.markup, error.offset, error.message)] };
   }
 }
 

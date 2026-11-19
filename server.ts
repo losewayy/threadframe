@@ -43,10 +43,9 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     },
     {
       instructions: [
-        "Use ThreadFrame proactively to show one compact interactive card (~450px height) when the user faces tunable trade-offs, 2–4 concrete options, a layered flow/topology, parameterized curves, or a filterable/sortable multi-row table.",
-        "Stay text-only for simple factual Q&A, single command output, or isolated error debugging.",
-        "Pick the most specific tool first: present_calculator (tunable inputs and metrics/templates), present_decision (2–4 options comparison), present_diagram (node/edge flows), or render_markup (custom layouts, curves, tables, and icon flow cards).",
-        "Keep detailed reasoning in the surrounding reply instead of cramming prose into the card. Native MCP Apps clients omit embedPath; embedded-HTML hosts pass embedPath via local --stdio; pass statePath only for local --stdio MCP Apps and read it on a later turn with read_threadframe_state.",
+        "Render a compact interactive ThreadFrame card (~450px height) whenever 1D static text breaks down: coupled inputs where live recalculation beats re-prompting (present_calculator), multi-criteria commitments whose chosen state feeds back into the conversation (present_decision), non-linear 2D topologies or timelines (present_diagram), or multi-attribute sets that benefit from local filtering, sorting, or view switching (render_markup).",
+        "Stay text-only whenever linear prose or code is already optimal, such as single-fact Q&A, sequential steps, or isolated debugging.",
+        "Keep detailed reasoning in surrounding prose instead of cramming text into the card. Native MCP Apps clients omit embedPath; embedded-HTML hosts pass embedPath via local --stdio; pass statePath only for local --stdio persistence across turns and read it later with read_threadframe_state.",
       ].join(" "),
     },
   );
@@ -107,12 +106,12 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
         'Use when a custom interactive card adds clarity—such as plotting parameter-linked curves, presenting a filterable/sortable table, or combining live formulas with icons and tinted boxes—when present_calculator, present_decision, or present_diagram does not fit.',
         "Do not call for factual Q&A, a single command output, or isolated error debugging.",
         'Example markup: <box tint="accent" padding="md"><slider id="x" label="Amount" min={1} max={10} default={3}/><text>**Total** {x * 2}</text></box>.',
-        'Use <title>, <caption>, <badge>, <divider/>, and <icon name="arrow-down"/>; use <plot><curve/><point x={...} y={...}/></plot>, <graph><node/><edge/></graph>, or <table><column/><row><cell/></row></table> for data.',
+        'Data & atom tags: <title>, <caption>, <badge label="..."/>, <divider/>, <icon name="arrow-down"/>; <plot mode="line" xVariable="x" xMin={0} xMax={10}><curve label="Y" formula={x * 2}/><point label="Now" x={4} y={8}/></plot>; <graph><node id="a" label="A"/><node id="b" label="B"/><edge from="a" to="b"/></graph>; <table><filter key="k" placeholder="Filter"/><column key="k" label="Name" sortable/><row><cell key="k" value="v"/></row></table>.',
         "Nesting rules: <tabs> and <accordion> are top-level only and cannot nest; <filter> belongs only inside <table>; inner <box> accepts only leaf atoms (<title>, <caption>, <text>, <badge>, <icon>, <stat>, <divider/>).",
         "Formula rules: <stat> formula accepts numbers or strings; <metric>, <bar>, <curve>, <point> (xFormula/yFormula/formula), and <node valueFormula> require numeric expressions.",
         "Quote strings; put numbers, booleans, and formulas in braces. Text supports **bold**, inline code, and live {expressions} over control IDs. No JavaScript, HTML, CSS, or event attributes.",
         "Use one question, 1–3 inputs, one main visual, and 1–3 results. Aim for ~450px in chat and keep long explanations in the reply.",
-        "Read threadframe://examples/markup for copyable recipes. Supply statePath only for local --stdio MCP Apps, or embedPath for a local HTML embed.",
+        "Read threadframe://examples/markup if MCP resources are available; otherwise use the inline examples above. Supply statePath only for local --stdio MCP Apps, or embedPath for a local HTML embed.",
       ].join(" "),
       inputSchema: MarkupInputSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },

@@ -86,6 +86,34 @@ test("markup errors point to the offending tag, attribute, or formula", () => {
   }
 });
 
+test("table cells accept key alias and markup errors aggregate fields with usage examples", () => {
+  const aliased = compileMarkup({
+    markup: `<table><column key="domain" label="Domain"/><row><cell key="domain" value="search"/></row></table>`,
+  });
+  assert.ok(aliased.ok);
+  assert.equal(aliased.spec.blocks[0]?.kind, "table");
+  assert.deepEqual(aliased.spec.blocks[0].rows[0]?.values, { domain: "search" });
+
+  const innerText = compileMarkup({
+    markup: `<table><column key="domain" label="Domain"/><row><cell>search</cell></row></table>`,
+  });
+  assert.ok(!innerText.ok);
+  assert.match(innerText.issues[0], /<cell> takes attributes only, not inner text; close it with \/>/);
+  assert.match(innerText.issues[0], /Valid attributes for <cell>: key \(required\), value \(required\)/);
+  assert.match(innerText.issues[0], /Example: <cell key="name" value="Item"\/>/);
+
+  const multi = compileMarkup({
+    markup: `<table><column name="Domain"/><row><cell value="search"/></row></table>`,
+  });
+  assert.ok(!multi.ok);
+  const combined = multi.issues.join("\n");
+  assert.match(combined, /unexpected or repeated attribute "name"/);
+  assert.match(combined, /<column>\.key/);
+  assert.match(combined, /<column>\.label/);
+  assert.match(combined, /<cell>\.key/);
+  assert.match(combined, /Example: <column key="name" label="Name" sortable\/>/);
+});
+
 test("markup preview preserves closed blocks and only applies checked presets", () => {
   const prefix = `<box><text>Ready</text><slider id="x" label="X" max={10} default={3}/>
     <choices><choice id="preset" label="Preset" prompt="Confirm"><set var="x" value={4}/></choice>
