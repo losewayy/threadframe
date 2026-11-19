@@ -39,6 +39,7 @@ export interface UiState {
   readonly accordionOpen: Map<string, boolean>;
   readonly timelineSelections: Map<string, string>;
   readonly nodeSelections: Map<string, string>;
+  readonly hasSubmitAction?: boolean;
   containerKey(block: UiBlock): string;
   notifyScopeChange(): void;
   setStatus(message: string): void;

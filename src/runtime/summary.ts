@@ -11,6 +11,7 @@ export interface SummaryInput {
   controlMeta: ReadonlyMap<string, ControlMeta>;
   selectedChoices: ReadonlySet<string>;
   choiceLabels: ReadonlyMap<string, string>;
+  choicePrompts?: ReadonlyMap<string, string>;
   checklistState: ReadonlyMap<string, boolean>;
   checklistLabels: ReadonlyMap<string, string>;
 }
@@ -50,7 +51,11 @@ export function buildIntentSummary(input: SummaryInput): string {
   const parts: string[] = [];
   if (changed.length) parts.push(`Changed: ${changed.join(", ")}`);
   else if (defaults.length) parts.push(`Defaults: ${defaults.join(", ")}`);
-  const choices = [...input.selectedChoices].map((id) => input.choiceLabels.get(id) ?? id);
+  const choices = [...input.selectedChoices].map((id) => {
+    const label = input.choiceLabels.get(id) ?? id;
+    const prompt = input.choicePrompts?.get(id);
+    return prompt && prompt !== label ? `${label} (${prompt})` : label;
+  });
   if (choices.length) parts.push(`Selected: ${choices.join(", ")}`);
   if (input.checklistState.size) {
     let done = 0;

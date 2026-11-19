@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { UiStateStore } from "../src/runtime/core/state.js";
+import { renderChoices } from "../src/runtime/blocks/choices.js";
 import { resolveSafeFilePath } from "../src/pathSafety.js";
 import { readSnapshot, writeSnapshot } from "../src/snapshot.js";
 import { UiSpecSchema } from "../src/schema/uiSpec.js";
@@ -106,4 +107,71 @@ test("state paths reject device names, ADS, UNC paths, and wrong suffixes", () =
   }
   const good = path.join(os.tmpdir(), "ok.json");
   assert.equal(resolveSafeFilePath(good, ".json"), path.resolve(good));
+});
+
+test("choices defer option prompts until Apply when a submit action exists", async () => {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const makeNode = (tag = "div") => {
+    const listeners = new Map<string, Array<() => void>>();
+    const classes = new Set<string>();
+    const node = {
+      tagName: tag,
+      className: "",
+      textContent: "",
+      type: "",
+      children: [] as unknown[],
+      attributes: new Map<string, string>(),
+      classList: {
+        add: (name: string) => { classes.add(name); },
+        toggle: (name: string, force?: boolean) => { if (force) classes.add(name); else classes.delete(name); },
+      },
+      setAttribute: (k: string, v: string) => { node.attributes.set(k, v); },
+      appendChild: (child: unknown) => { node.children.push(child); return child; },
+      addEventListener: (event: string, fn: () => void) => { listeners.set(event, [...(listeners.get(event) ?? []), fn]); },
+      click: () => { for (const fn of listeners.get("click") ?? []) fn(); },
+    };
+    return node;
+  };
+  (globalThis as { document?: unknown }).document = {
+    createElement: (tag: string) => makeNode(tag),
+    createElementNS: (_ns: string, tag: string) => makeNode(tag),
+    createTextNode: (text: string) => ({ textContent: text }),
+  };
+
+  try {
+    const block = {
+      kind: "choices" as const,
+      options: [
+        { id: "auto", label: "Auto fill", prompt: "Apply auto fill" },
+        { id: "keep", label: "Keep as is", prompt: "Keep current config" },
+      ],
+    };
+
+    const deferredSent: string[] = [];
+    const statuses: string[] = [];
+    const deferredState = new UiStateStore({ sendMessage: (text) => { deferredSent.push(text); } }, (text) => statuses.push(text));
+    deferredState.hasSubmitAction = true;
+    deferredState.initDefaults([block]);
+    const grid = renderChoices(block, deferredState.createContext(() => makeNode() as unknown as HTMLElement)) as unknown as {
+      children: Array<{ click: () => void }>;
+    };
+    grid.children[0].click();
+    grid.children[1].click();
+    assert.deepEqual(deferredSent, []);
+    assert.equal(statuses.at(-1), "Selected: Keep as is");
+    await deferredState.dispatchAction({ label: "Apply decision", kind: "send_message", promptTemplate: "Decision: {{state_summary}}" });
+    assert.deepEqual(deferredSent, ["Decision: Selected: Keep as is (Keep current config)"]);
+
+    const immediateSent: string[] = [];
+    const immediateState = new UiStateStore({ sendMessage: (text) => { immediateSent.push(text); } });
+    immediateState.hasSubmitAction = false;
+    immediateState.initDefaults([block]);
+    const quickGrid = renderChoices(block, immediateState.createContext(() => makeNode() as unknown as HTMLElement)) as unknown as {
+      children: Array<{ click: () => void }>;
+    };
+    quickGrid.children[0].click();
+    assert.deepEqual(immediateSent, ["Apply auto fill"]);
+  } finally {
+    (globalThis as { document?: unknown }).document = previousDocument;
+  }
 });

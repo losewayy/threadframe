@@ -16,8 +16,10 @@ export class UiStateStore implements UiState {
   readonly nodeSelections = new Map<string, string>();
   readonly controlMeta = new Map<string, ControlMeta>();
   readonly choiceLabels = new Map<string, string>();
+  readonly choicePrompts = new Map<string, string>();
   readonly checklistLabels = new Map<string, string>();
   specTitle = "";
+  hasSubmitAction = false;
   private readonly containerKeys = new WeakMap<UiBlock, string>();
   private reactiveBindings: ReactiveBinding[] = [];
   private controlSyncCallbacks: ControlSyncCallback[] = [];
@@ -107,6 +109,7 @@ export class UiStateStore implements UiState {
       } else if (block.kind === "choices") {
         for (const option of block.options) {
           if (!this.choiceLabels.has(option.id)) this.choiceLabels.set(option.id, option.label);
+          if (option.prompt && !this.choicePrompts.has(option.id)) this.choicePrompts.set(option.id, option.prompt);
         }
       }
     });
@@ -127,6 +130,7 @@ export class UiStateStore implements UiState {
       controlMeta: this.controlMeta,
       selectedChoices: this.selectedChoiceIds,
       choiceLabels: this.choiceLabels,
+      choicePrompts: this.choicePrompts,
       checklistState: this.checklistState,
       checklistLabels: this.checklistLabels,
     });

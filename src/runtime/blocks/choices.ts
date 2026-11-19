@@ -41,7 +41,7 @@ export const renderChoices: BlockRenderer<"choices"> = (block, context) => {
         Object.assign(state.scope, opt.setVars);
         state.notifyScopeChange();
         state.setStatus(`Profile: ${opt.label}`);
-      } else if (opt.prompt && state.prompt(opt.prompt)) {
+      } else if (!state.hasSubmitAction && opt.prompt && state.prompt(opt.prompt)) {
         state.setStatus(`Prompted: ${opt.label}`);
       } else {
         state.setStatus(`Selected: ${opt.label}`);
