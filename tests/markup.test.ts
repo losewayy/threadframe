@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MARKUP_RECIPES } from "../src/examples.js";
-import { renderFallbackMarkdown, formatLayoutSummary } from "../src/schema/fallback.js";
+import { renderFallbackMarkdown, formatLayoutSummary, measureLayout } from "../src/schema/fallback.js";
 import { compileMarkup, parsePartialMarkup } from "../src/schema/markup.js";
 import { markupTags } from "../src/schema/markupTags.js";
 import { UiSpecSchema } from "../src/schema/uiSpec.js";
@@ -218,11 +218,17 @@ test("markup derives omitted structural ids, accepts natural aliases, and compil
 test("formatLayoutSummary flags compact cards vs overflowing multi-row tables", () => {
   const compact = compileMarkup({ markup: '<box><text>Hello</text></box>' });
   assert.ok(compact.ok);
+  assert.equal(measureLayout(compact.spec).overflows, false);
   assert.match(formatLayoutSummary(compact.spec), /fits ~450px chat comfort height/);
 
   const rows = Array.from({ length: 18 }, (_, i) => `<row><cell key="k" value="Row ${i}"/></row>`).join("");
-  const dense = compileMarkup({ markup: `<table><column key="k" label="K"/>${rows}</table>` });
+  const dense = compileMarkup({ markup: `<tabs><tab label="Data"><table><column key="k" label="K"/>${rows}</table></tab><tab label="Notes"><text>Hi</text></tab></tabs>` });
   assert.ok(dense.ok);
+  const metrics = measureLayout(dense.spec);
+  assert.equal(metrics.overflows, true);
+  assert.equal(metrics.rows, 18);
+  assert.equal(metrics.activeTab, "Data");
+  assert.equal(metrics.tabs, 2);
   const summary = formatLayoutSummary(dense.spec);
   assert.match(summary, /table 18 rows/);
   assert.match(summary, /exceeds ~450px comfort height/);

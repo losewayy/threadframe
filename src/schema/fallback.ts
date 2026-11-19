@@ -5,7 +5,7 @@ import { curveSummary, sampleCurve } from "../runtime/curve.js";
 import { formatCell, resolveCell } from "../runtime/table.js";
 import type { IconName } from "./atoms.js";
 import { escapeMarkdownText, inlineTextMarkdown, markdownCodeSpan } from "./inlineText.js";
-import { walkBlocks, type UiBlock, type UiSpec } from "./uiSpec.js";
+import { walkBlocks, type LayoutSummary, type UiBlock, type UiSpec } from "./uiSpec.js";
 
 const inline = (text: string) => escapeMarkdownText(text.replace(/\r\n?|\n/g, " "));
 const unit = (text?: string) => text ? ` ${inline(text)}` : "";
@@ -255,6 +255,7 @@ interface LayoutMetrics {
   height: number;
   maxTableRows: number;
   tabCount: number;
+  activeTab?: string;
   clippedGraph: boolean;
 }
 
@@ -300,6 +301,7 @@ function measureBlocks(blocks: UiBlock[], out: LayoutMetrics): number {
       case "tabs": {
         out.tabCount = Math.max(out.tabCount, block.tabs.length);
         const active = block.tabs.find((tab) => tab.id === block.defaultTab) ?? block.tabs[0];
+        if (!out.activeTab && active) out.activeTab = active.label;
         total += 42 + (active ? measureBlocks(active.children, out) : 0);
         break;
       }
@@ -316,18 +318,30 @@ function measureBlocks(blocks: UiBlock[], out: LayoutMetrics): number {
   return total;
 }
 
-/** Estimates rendered card height and dense-content overflow for caller feedback. */
-export function formatLayoutSummary(spec: UiSpec): string {
+/** Computes structured layout dimensions and overflow signals for callers. */
+export function measureLayout(spec: UiSpec): LayoutSummary {
   const metrics: LayoutMetrics = { height: 0, maxTableRows: 0, tabCount: 0, clippedGraph: false };
   const chrome = (spec.subtitle ? 72 : 52) + (spec.actions?.length ? 46 : 0) + 42;
-  const est = Math.round((chrome + measureBlocks(spec.blocks, metrics)) / 10) * 10;
+  const estimatedPx = Math.round((chrome + measureBlocks(spec.blocks, metrics)) / 10) * 10;
+  return {
+    estimatedPx,
+    overflows: estimatedPx > 480 || metrics.clippedGraph,
+    ...(metrics.activeTab ? { activeTab: metrics.activeTab } : {}),
+    ...(metrics.maxTableRows > 0 ? { rows: metrics.maxTableRows } : {}),
+    ...(metrics.tabCount > 1 ? { tabs: metrics.tabCount } : {}),
+    ...(metrics.clippedGraph ? { graphClipped: true } : {}),
+  };
+}
+
+/** Formats layout metrics into a single-line textual hint for fallback hosts. */
+export function formatLayoutSummary(spec: UiSpec, layout = measureLayout(spec)): string {
   const notes: string[] = [];
-  if (metrics.tabCount > 1) notes.push(`${metrics.tabCount} tabs`);
-  if (metrics.maxTableRows > 0) notes.push(`table ${metrics.maxTableRows} rows`);
-  if (metrics.clippedGraph) notes.push("graph viewport caps at 256px height");
+  if (layout.tabs) notes.push(`${layout.tabs} tabs`);
+  if (layout.rows) notes.push(`table ${layout.rows} rows`);
+  if (layout.graphClipped) notes.push("graph viewport caps at 256px height");
   const detail = notes.length ? `${notes.join(", ")}; ` : "";
-  if (est <= 480 && !metrics.clippedGraph) {
-    return `Layout: ~${est}px estimated (${detail}fits ~450px chat comfort height).`;
+  if (!layout.overflows) {
+    return `Layout: ~${layout.estimatedPx}px estimated (${detail}fits ~450px chat comfort height).`;
   }
-  return `Layout: ~${est}px estimated (${detail}exceeds ~450px comfort height and will likely scroll—consider <tabs>, <accordion>, or fewer rows).`;
+  return `Layout: ~${layout.estimatedPx}px estimated (${detail}exceeds ~450px comfort height and will likely scroll—consider <tabs>, <accordion>, or fewer rows).`;
 }

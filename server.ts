@@ -8,7 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { renderFallbackMarkdown, formatLayoutSummary } from "./src/schema/fallback.js";
+import { renderFallbackMarkdown, formatLayoutSummary, measureLayout } from "./src/schema/fallback.js";
 import { choiceAssignmentIssues } from "./src/schema/uiSpec.js";
 import type { UiSpec } from "./src/schema/uiSpec.js";
 import { detectClientAdapter } from "./src/clientAdapter.js";
@@ -77,20 +77,22 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
       }
     }
     const markdown = renderFallbackMarkdown(spec);
-    const layout = formatLayoutSummary(spec);
-    if (mode === "mcp-apps") return { content: [{ type: "text" as const, text: `${markdown}\n\n${layout}` }], structuredContent: spec };
+    const layoutMetrics = measureLayout(spec);
+    const layout = formatLayoutSummary(spec, layoutMetrics);
+    const structuredSpec: UiSpec = { ...spec, layout: layoutMetrics };
+    if (mode === "mcp-apps") return { content: [{ type: "text" as const, text: `${markdown}\n\n${layout}` }], structuredContent: structuredSpec };
     let hint = `Client mode: ${mode}. Markdown fallback returned.`;
     if (embedPath !== undefined) {
       try {
         if (!options.localStdio) throw new Error("embedPath writes are only allowed in local --stdio mode, never over HTTP");
-        const html = injectStandaloneHtml(await readUiBundleHtml(), spec, { embed: true });
+        const html = injectStandaloneHtml(await readUiBundleHtml(), structuredSpec, { embed: true });
         const uri = await writeEmbedFile(embedPath, html, true);
         hint = `Client mode: ${mode}. Embed HTML written: ${uri}`;
       } catch (error) {
         return { isError: true, content: [{ type: "text" as const, text: `${markdown}\n\n${layout}\n\nEmbed export failed: ${(error as Error).message}` }] };
       }
     } else if (mode === "antigravity") hint += " Pass embedPath with an artifact .html path through local --stdio to generate an embedded page.";
-    return { content: [{ type: "text" as const, text: `${markdown}\n\n${layout}\n\n${hint}` }], structuredContent: spec };
+    return { content: [{ type: "text" as const, text: `${markdown}\n\n${layout}\n\n${hint}` }], structuredContent: structuredSpec };
   };
 
   const compileError = (issues: string[]) => ({

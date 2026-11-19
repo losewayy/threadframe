@@ -241,14 +241,25 @@ export const UiActionSchema = z.object({
   statePath: z.string().optional(),
 });
 
+export const LayoutSummarySchema = z.object({
+  estimatedPx: z.number().int().nonnegative(),
+  overflows: z.boolean(),
+  activeTab: z.string().optional(),
+  rows: z.number().int().nonnegative().optional(),
+  tabs: z.number().int().positive().optional(),
+  graphClipped: z.boolean().optional(),
+});
+
 export const UiSpecSchema = z.object({
   title: z.string(),
   subtitle: z.string().optional(),
   badge: z.string().optional(),
   blocks: z.array(UiBlockSchema).min(1),
   actions: z.array(UiActionSchema).optional(),
+  layout: LayoutSummarySchema.optional(),
 });
 
+export type LayoutSummary = z.infer<typeof LayoutSummarySchema>;
 export type UiSpec = z.infer<typeof UiSpecSchema>;
 export type UiBlock = z.infer<typeof UiBlockSchema>;
 export type LeafBlock = z.infer<typeof LeafBlockSchema>;
