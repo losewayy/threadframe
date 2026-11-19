@@ -23,7 +23,7 @@ pnpm install --frozen-lockfile
 pnpm start
 ```
 
-Open `http://127.0.0.1:3001/` to explore all 7 built-in presets, simulate token-by-token partial streaming, toggle light/dark themes, switch Wide/Compact preview widths, and test your own JSON specs.
+Open `http://127.0.0.1:3001/` to explore all 7 built-in presets, simulate token-by-token partial streaming, toggle light/dark themes, switch Wide/Compact preview widths, and test your own `render_markup` tags or JSON specs.
 
 ### 2. Connect to Codex
 
@@ -96,13 +96,13 @@ Use the shortcut tools for standard calculators, decisions, and diagrams. Use `r
 
 A top-level `box` or a `grid` can hold ordinary blocks and one level of shallow boxes. A shallow box holds only text, headings, captions, badges, dividers, and icons. A tab or accordion section can hold ordinary blocks, shallow boxes, or a grid. Hidden panels stay mounted so controls and charts remain synchronized.
 
-Built-in presets (`inspect_preset_frame`): `gpu-vram-tuner`, `runtime-compare`, `deploy-checklist`, `mcp-architecture`, `composable-workbench`, `svg-visual-lab`, `agent-launch-kit`.
+Built-in presets for the Playground and CLI `--export`: `gpu-vram-tuner`, `runtime-compare`, `deploy-checklist`, `mcp-architecture`, `composable-workbench`, `svg-visual-lab`, `agent-launch-kit`.
 
 ## How It Works
 
 ```mermaid
 flowchart LR
-  Agent[Agent / MCP client] -->|UiSpec or preset| Server[ThreadFrame MCP Server]
+  Agent[Agent / MCP client] -->|Shortcut or markup| Server[ThreadFrame MCP Server]
   Server -->|ui:// + structuredContent| Host[MCP Apps host]
   Server -->|Markdown| Text[Text-only client]
   Server -->|embedPath --embed| Embed[Embedded HTML artifact]
@@ -112,8 +112,9 @@ flowchart LR
   Core --> Pure[Schemas / Formula Engine / Fallback]
 ```
 
-- **MCP Tools** include `render_threadframe` for raw UiSpec, `render_markup` for tagged layouts, `inspect_preset_frame` for presets, and the shortcuts `present_calculator`, `present_decision`, and `present_diagram`. They share UiSpec, rendering, embed export, and Markdown fallback.
-- **MCP Resources** include the runtime at `ui://threadframe/view.html` and examples at `threadframe://examples/markup`, `threadframe://examples/svg`, and `threadframe://examples/recipes`.
+- **Focused MCP Tool Surface**: Four non-overlapping card tools—`present_calculator`, `present_decision`, `present_diagram`, and `render_markup`—plus on-demand `read_threadframe_state`. `save_threadframe_state` uses MCP Apps `visibility: ["app"]` so only UI actions invoke it, hidden from the model prompt.
+- **Built-in Proactive Triggering**: Server-level MCP `instructions` and tool descriptions tell connecting agents when to render one compact card (~450px) and when to stay text-only. Copy-ready client snippets for Codex, Claude, Cursor, and Antigravity live in [docs/agent-prompts.md](docs/agent-prompts.md).
+- **MCP Resources**: Exposes the runtime bundle at `ui://threadframe/view.html` and examples at `threadframe://examples/markup`, `threadframe://examples/recipes`, and `threadframe://examples/svg`.
 - **Formulas & Templates**: Controls bind variables into an arithmetic/comparison/ternary recursive-descent parser (`min`, `max`, `abs`, `floor`, `ceil`, `round`, `clamp`, `if`, plus string `+` concatenation). Curve plots sample formulas over a domain and break at undefined points. Code blocks substitute `{{var}}` safely via `textContent`. See [docs/example.json](docs/example.json).
 - **Snapshot Loop (opt-in)**: When a local `--stdio` shortcut call provides an explicit `statePath`, the Apply & remember action writes a compact JSON snapshot; `read_threadframe_state` returns it on the next turn. Without `statePath`, nothing touches disk.
 

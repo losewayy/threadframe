@@ -8,9 +8,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { PRESETS } from "./src/presets.js";
 import { renderFallbackMarkdown } from "./src/schema/fallback.js";
-import { UiSpecSchema, choiceAssignmentIssues } from "./src/schema/uiSpec.js";
+import { choiceAssignmentIssues } from "./src/schema/uiSpec.js";
 import type { UiSpec } from "./src/schema/uiSpec.js";
 import { detectClientAdapter } from "./src/clientAdapter.js";
 import { injectStandaloneHtml } from "./src/export.js";
@@ -37,10 +36,20 @@ export async function readUiBundleHtml(): Promise<string> {
  * Creates a configured MCP server exposing streaming ThreadFrame tools and ui:// resources.
  */
 export function createServer(options: { localStdio?: boolean } = {}): McpServer {
-  const server = new McpServer({
-    name: "threadframe",
-    version: VERSION,
-  });
+  const server = new McpServer(
+    {
+      name: "threadframe",
+      version: VERSION,
+    },
+    {
+      instructions: [
+        "Use ThreadFrame proactively to show one compact interactive card (~450px height) when the user faces tunable trade-offs, 2–4 concrete options, a layered flow/topology, parameterized curves, or a filterable/sortable multi-row table.",
+        "Stay text-only for simple factual Q&A, single command output, or isolated error debugging.",
+        "Pick the most specific tool first: present_calculator (tunable inputs and metrics/templates), present_decision (2–4 options comparison), present_diagram (node/edge flows), or render_markup (custom layouts, curves, tables, and icon flow cards).",
+        "Keep detailed reasoning in the surrounding reply instead of cramming prose into the card. Native MCP Apps clients omit embedPath; embedded-HTML hosts pass embedPath via local --stdio; pass statePath only for local --stdio MCP Apps and read it on a later turn with read_threadframe_state.",
+      ].join(" "),
+    },
+  );
 
   const embedPathSchema = z.string().optional().describe(
     "Optional local .html output path for non-MCP-Apps embedded hosts. Only local --stdio may write files. Native MCP Apps clients should omit this.",
@@ -91,24 +100,12 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
 
   registerAppTool(
     server,
-    "render_threadframe",
-    {
-      title: "Render Custom ThreadFrame",
-      description:
-        'Render a fully custom interactive card with the low-level UiSpec schema. Prefer present_calculator for parameter tuning, present_decision for picking among 2-4 options, and present_diagram for node/edge flows. Prefer render_markup for custom tag layouts. Use this tool when you need raw UiSpec. Blocks: choices, controls, stats, chart, plot, svg, compare, checklist, timeline, architecture, graph, table, callout, code, text, title, caption, badge, divider, icon; bounded containers: box, grid, tabs, accordion. plot accepts discrete points, or parameterized curves in line mode: curves (label + formula), xMin/xMax, optional xVariable (default x) and samples; undefined or non-finite samples break the line into segments. graph auto-lays nodes/edges without manual coordinates, and table supports sortable columns plus keyword/status filtering. Control ids define variables; formulas support arithmetic, comparisons, ternary and min/max/abs/floor/ceil/round/clamp/if; code uses {{var}}. Keep cards compact: fold secondary detail into tabs or a collapsed accordion, target roughly 450px and stay under about 800px. Never supply executable HTML or JavaScript. Minimal linked example: {"title":"Size","blocks":[{"kind":"controls","controls":[{"kind":"slider","id":"x","label":"Size","min":1,"max":10,"defaultValue":3}]},{"kind":"stats","items":[{"label":"Size","formula":"x"}]},{"kind":"svg","width":120,"height":30,"elements":[{"type":"rect","x":0,"y":0,"widthFormula":"x * 10","height":20,"fill":"primary"}]}]}. Read threadframe://examples/svg or threadframe://examples/recipes for more.',
-      inputSchema: UiSpecSchema.extend({ embedPath: embedPathSchema }),
-      _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
-    },
-    async ({ embedPath, ...spec }) => respond(spec, embedPath),
-  );
-
-  registerAppTool(
-    server,
     "render_markup",
     {
       title: "Render ThreadFrame from Markup",
       description: [
-        "Compose a custom interactive card from safe JSX-like tags. Use present_calculator, present_decision, or present_diagram when a shortcut fits.",
+        "Use when a custom interactive card adds clarity—such as plotting parameter-linked curves, presenting a filterable/sortable table, or combining live formulas with icons and tinted boxes—when present_calculator, present_decision, or present_diagram does not fit.",
+        "Do not call for factual Q&A, a single command output, or isolated error debugging.",
         'Example markup: <box tint="accent" padding="md"><slider id="x" label="Amount" min={1} max={10} default={3}/><text>**Total** {x * 2}</text></box>.',
         'Use <title>, <caption>, <badge>, <divider/>, and <icon name="arrow-down"/>; use <plot><curve/></plot>, <graph><node/><edge/></graph>, or <table><column/><row><cell/></row></table> for data.',
         "Quote strings; put numbers, booleans, and formulas in braces. Text supports **bold**, inline code, and live {expressions} over control IDs. No JavaScript, HTML, CSS, or event attributes.",
@@ -162,7 +159,7 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     {
       title: "Present Auto-Laid Diagram",
       description:
-        'Use when explaining a layered call chain, data flow, pipeline, or dependency topology. Provide nodes and directed edges only; coordinates, box sizes, and arrow paths are computed automatically. Do not hand-calculate SVG coordinates for these cases, and do not use this tool for measured charts (use render_threadframe with plot/chart). Nodes need stable ids (derived from labels when omitted) and can use a built-in icon name; edges reference ids or labels. Optional inputs declare variables usable by node valueFormula and edge activeFormula to animate paths from sliders or toggles. Cycles are layered safely. Example: {"title":"Request path","nodes":[{"id":"client","label":"Client"},{"id":"api","label":"API","role":"Node"}],"edges":[{"from":"client","to":"api","label":"HTTP"}]}. Pass statePath only in local --stdio mode to add a Remember diagram snapshot action.',
+        'Use when explaining a layered call chain, data flow, pipeline, or dependency topology. Provide nodes and directed edges only; coordinates, box sizes, and arrow paths are computed automatically. Do not hand-calculate SVG coordinates for these cases, and do not use this tool for measured charts (use render_markup with <plot> or <chart>). Nodes need stable ids (derived from labels when omitted) and can use a built-in icon name; edges reference ids or labels. Optional inputs declare variables usable by node valueFormula and edge activeFormula to animate paths from sliders or toggles. Cycles are layered safely. Example: {"title":"Request path","nodes":[{"id":"client","label":"Client"},{"id":"api","label":"API","role":"Node"}],"edges":[{"from":"client","to":"api","label":"HTTP"}]}. Pass statePath only in local --stdio mode to add a Remember diagram snapshot action.',
       inputSchema: DiagramInputSchema.extend({ embedPath: embedPathSchema }),
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
     },
@@ -174,29 +171,13 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
 
   registerAppTool(
     server,
-    "inspect_preset_frame",
-    {
-      title: "Inspect Preset ThreadFrame",
-      description:
-        "Render one of the built-in ThreadFrame showpieces. Use it to show the available interaction patterns quickly; presets are demonstrations, not measured data.",
-      inputSchema: z.object({
-        embedPath: embedPathSchema,
-        preset: z
-          .enum(["gpu-vram-tuner", "runtime-compare", "deploy-checklist", "mcp-architecture", "composable-workbench", "svg-visual-lab", "agent-launch-kit"])
-          .describe("Preset showcase identifier"),
-      }),
-      _meta: { ui: { resourceUri: UI_RESOURCE_URI } },
-    },
-    async ({ preset, embedPath }) => respond(PRESETS[preset], embedPath),
-  );
-
-  server.registerTool(
     "save_threadframe_state",
     {
       title: "Save ThreadFrame State",
       description:
         "Write a compact snapshot for the next turn. Called by the ThreadFrame UI's explicit Apply & remember action. Available only in local --stdio mode; disabled over HTTP. statePath must be an explicit local .json path without device names, ADS, UNC paths, or symlink components.",
       inputSchema: z.object({ statePath: z.string(), snapshot: SnapshotSchema }),
+      _meta: { ui: { resourceUri: UI_RESOURCE_URI, visibility: ["app"] } },
     },
     async ({ statePath, snapshot }) => {
       const mode = detectClientAdapter(server.server.getClientVersion(), server.server.getClientCapabilities(), process.env.THREADFRAME_HOST);
@@ -216,7 +197,7 @@ export function createServer(options: { localStdio?: boolean } = {}): McpServer 
     {
       title: "Read ThreadFrame State",
       description:
-        "Read the latest confirmed ThreadFrame snapshot from an explicitly chosen .json path. Read-only and available only in local --stdio mode; disabled over HTTP.",
+        "Read the latest confirmed ThreadFrame snapshot from an explicitly chosen .json path. Only call when a prior MCP Apps turn passed statePath and the user confirmed Apply & remember. Read-only and available only in local --stdio mode; disabled over HTTP.",
       inputSchema: z.object({ statePath: z.string() }),
     },
     async ({ statePath }) => {

@@ -151,7 +151,9 @@
       color: var(--pg-text);
       font: .875rem/1.5 ui-monospace, "SFMono-Regular", Consolas, monospace;
     }
-    .custom-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .custom-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+    .mode-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+    .mode-bar button[aria-pressed="true"] { background: var(--pg-focus); color: var(--pg-button-text); }
     .spec-error { color: light-dark(#a32d2d, #ffb4b4); white-space: pre-wrap; font-size: .875rem; }
     .message-preview {
       margin: 10px 0 0;
@@ -197,10 +199,27 @@
       <button id="theme-btn" type="button">Host Theme: Dark</button>
     </div>
     <details class="custom-spec">
-      <summary>Custom JSON Spec</summary>
-      <label for="custom-json">Paste a UiSpec to validate and preview</label>
-      <textarea id="custom-json" spellcheck="false">{"title":"Custom view","blocks":[{"kind":"callout","body":"Replace this with your own UI spec."}]}</textarea>
-      <div class="custom-actions"><button id="run-custom" class="primary" type="button">Run Spec</button><button id="stream-custom" type="button">Simulate Stream</button></div>
+      <summary>Custom Markup / JSON Spec</summary>
+      <div class="mode-bar" role="group" aria-label="Editor format">
+        <button id="mode-markup" type="button" aria-pressed="true">Markup</button>
+        <button id="mode-json" type="button" aria-pressed="false">JSON</button>
+        <select id="markup-example-select" aria-label="Load markup example">
+          <option value="flow">Example: Tinted Flow</option>
+          <option value="curve">Example: Linked Curve</option>
+          <option value="diagram">Example: Auto Graph</option>
+          <option value="table">Example: Sortable Table</option>
+        </select>
+        <button id="load-markup-example" type="button">Load Example</button>
+      </div>
+      <label id="custom-label" for="custom-json">Write ThreadFrame markup (&lt;frame&gt;, &lt;box&gt;, &lt;slider&gt;, &lt;plot&gt;, &lt;table&gt;) to compile and preview</label>
+      <textarea id="custom-json" spellcheck="false">&lt;frame title="Transfer capacity"&gt;
+  &lt;slider id="workers" label="Workers" min={1} max={8} default={3}/&gt;
+  &lt;box tint="accent" padding="md"&gt;
+    &lt;title&gt;Estimated throughput&lt;/title&gt;
+    &lt;text&gt;**{workers * 4} jobs/s** at full utilization&lt;/text&gt;
+  &lt;/box&gt;
+&lt;/frame&gt;</textarea>
+      <div class="custom-actions"><button id="run-custom" class="primary" type="button">Run</button><button id="stream-custom" type="button">Simulate Stream</button></div>
       <p id="spec-error" class="spec-error" role="alert" hidden></p>
     </details>
     <main class="wrap">
@@ -315,7 +334,7 @@
           id: msg.id,
           result: {
             protocolVersion: "2026-01-26",
-            hostInfo: { name: "threadframe-playground", version: "0.3.0" },
+            hostInfo: { name: "threadframe-playground", version: "0.5.0" },
             hostCapabilities: { openLinks: {}, message: { text: {} } },
             hostContext: { theme: hostTheme }
           }
@@ -374,16 +393,60 @@
       event.currentTarget.textContent = compactPreview ? "Width: Compact (420px)" : "Width: Wide (760px)";
     });
     const customError = document.getElementById("spec-error");
+    const customInput = document.getElementById("custom-json");
+    const customLabel = document.getElementById("custom-label");
+    const modeMarkupBtn = document.getElementById("mode-markup");
+    const modeJsonBtn = document.getElementById("mode-json");
+    const exampleSelect = document.getElementById("markup-example-select");
+    const loadExampleBtn = document.getElementById("load-markup-example");
+    let customMode = "markup";
+    const modeBuffers = {
+      markup: customInput.value,
+      json: '{"title":"Custom view","blocks":[{"kind":"callout","body":"Replace this with your own UI spec."}]}'
+    };
+    let markupExamples = {};
+    fetch("/markup-examples.json")
+      .then((r) => r.json())
+      .then((data) => { markupExamples = data; })
+      .catch(() => {});
+
+    function setCustomMode(next) {
+      if (next === customMode) return;
+      modeBuffers[customMode] = customInput.value;
+      customMode = next;
+      customInput.value = modeBuffers[next];
+      modeMarkupBtn.setAttribute("aria-pressed", String(next === "markup"));
+      modeJsonBtn.setAttribute("aria-pressed", String(next === "json"));
+      exampleSelect.hidden = next !== "markup";
+      loadExampleBtn.hidden = next !== "markup";
+      customLabel.textContent = next === "markup"
+        ? "Write ThreadFrame markup (<frame>, <box>, <slider>, <plot>, <table>) to compile and preview"
+        : "Paste a UiSpec JSON object to validate and preview";
+      customError.hidden = true;
+    }
+
+    modeMarkupBtn.addEventListener("click", () => setCustomMode("markup"));
+    modeJsonBtn.addEventListener("click", () => setCustomMode("json"));
+    loadExampleBtn.addEventListener("click", () => {
+      const ex = markupExamples[exampleSelect.value];
+      if (!ex || typeof ex.markup !== "string") return;
+      const attrs = [ex.title ? 'title="' + ex.title.replace(/"/g, "'") + '"' : "", ex.subtitle ? 'subtitle="' + ex.subtitle.replace(/"/g, "'") + '"' : ""].filter(Boolean).join(" ");
+      customInput.value = "<frame" + (attrs ? " " + attrs : "") + ">\n" + ex.markup + "\n</frame>";
+      modeBuffers.markup = customInput.value;
+      customError.hidden = true;
+    });
+
     async function runCustom(streaming) {
       const buttons = [document.getElementById("run-custom"), document.getElementById("stream-custom")];
       customError.hidden = true;
       buttons.forEach((button) => { button.disabled = true; });
       try {
         if (!frameReady) throw new Error("The preview is starting. Try again in a moment.");
-        const input = JSON.parse(document.getElementById("custom-json").value);
-        const response = await fetch("/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+        const endpoint = customMode === "markup" ? "/compile-markup" : "/validate";
+        const payload = customMode === "markup" ? { markup: customInput.value } : JSON.parse(customInput.value);
+        const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const result = await response.json();
-        if (!response.ok) throw new Error((result.issues ?? []).map((issue) => (issue.path.join(".") || "spec") + ": " + issue.message).join("\n") || "Validation failed");
+        if (!response.ok) throw new Error((result.issues ?? []).map((issue) => (issue.path && issue.path.length ? issue.path.join(".") + ": " : "") + issue.message).join("\n") || "Validation failed");
         clearTimers();
         if (streaming) runSpecStream(result.spec);
         else {

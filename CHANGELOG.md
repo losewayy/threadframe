@@ -11,11 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `render_markup` compiles concise tags, live text formulas, and bounded layouts to UiSpec. Closed components can appear while the host streams arguments.
 - `box`, `text`, `title`, `caption`, `badge`, `divider`, and `icon` blocks, with semantic tints and a shared icon set for diagrams and choices.
-- Tinted flow, linked curve, and sortable table examples at `threadframe://examples/markup`.
+- Tinted flow, linked curve, and sortable table examples at `threadframe://examples/markup`, live markup compilation in the Playground (`/compile-markup`), server-level MCP `instructions`, and cross-client prompting snippets in `docs/agent-prompts.md`.
 
 ### Changed
 
-- Light, dark, and embedded cards use softer surfaces, clearer type hierarchy, and more compact controls. Tables wrap text, and large graph canvases scroll within their own region.
+- Light, dark, and embedded cards use softer surfaces, clearer type hierarchy, and more compact controls. Tables wrap text, range sliders render keyboard focus rings around the thumb instead of the outer track box, and large graph canvases scroll within their own region.
+- Focused the MCP tool list on 4 non-overlapping card entry points (`present_calculator`, `present_decision`, `present_diagram`, `render_markup`) plus `read_threadframe_state`, retired redundant `render_threadframe` / `inspect_preset_frame` from default MCP registration, and scoped `save_threadframe_state` with `visibility: ["app"]`.
 
 ### Fixed
 

@@ -11,6 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer, readUiBundleHtml } from "./server.js";
 import { PRESETS } from "./src/presets.js";
+import { MARKUP_RECIPES } from "./src/examples.js";
+import { compileMarkup, MarkupInputSchema } from "./src/schema/markup.js";
 import { UiSpecSchema, choiceAssignmentIssues, type UiSpec } from "./src/schema/uiSpec.js";
 import { injectStandaloneHtml } from "./src/export.js";
 
@@ -83,6 +85,24 @@ export async function startHttpServer(makeServer: () => McpServer): Promise<void
 
   app.get("/presets.json", (_req: Request, res: Response) => {
     res.json(PRESETS);
+  });
+
+  app.get("/markup-examples.json", (_req: Request, res: Response) => {
+    res.json(MARKUP_RECIPES);
+  });
+
+  app.post("/compile-markup", json({ limit: "1mb" }), (req: Request, res: Response) => {
+    const parsed = MarkupInputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ issues: parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })) });
+      return;
+    }
+    const compiled = compileMarkup(parsed.data);
+    if (!compiled.ok) {
+      res.status(422).json({ issues: compiled.issues.map((message) => ({ path: [], message })) });
+      return;
+    }
+    res.json({ spec: compiled.spec });
   });
 
   app.post("/validate", json({ limit: "1mb" }), (req: Request, res: Response) => {

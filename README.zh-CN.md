@@ -23,7 +23,7 @@ pnpm install --frozen-lockfile
 pnpm start
 ```
 
-打开 `http://127.0.0.1:3001/` 即可体验内置的 7 套场景、重放流式逐块加载、切换深浅色主题、切换宽/窄对话宽度（760px / 420px），以及粘贴自定义 JSON 直接校验试跑。
+打开 `http://127.0.0.1:3001/` 即可体验内置的 7 套场景、重放流式逐块加载、切换深浅色主题、切换宽/窄对话宽度（760px / 420px），以及直接编写 `render_markup` 标签或粘贴 JSON 校验试跑。
 
 ### 2. 接入 Codex
 
@@ -98,7 +98,10 @@ cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 
 三个快捷工具 `present_calculator`、`present_decision`、`present_diagram` 与 `render_markup` 都编译成标准 UiSpec，共用渲染、`--embed` 导出和 Markdown 降级。
 
-7 个内置展示预设（`inspect_preset_frame`）：`gpu-vram-tuner`、`runtime-compare`、`deploy-checklist`、`mcp-architecture`、`composable-workbench`、`svg-visual-lab`、`agent-launch-kit`。
+7 个内置展示预设（可用于 Playground 与 CLI `--export`）：`gpu-vram-tuner`、`runtime-compare`、`deploy-checklist`、`mcp-architecture`、`composable-workbench`、`svg-visual-lab`、`agent-launch-kit`。
+
+- **聚焦后的 MCP 工具面**：只保留 4 个互不重叠的写卡入口——`present_calculator`、`present_decision`、`present_diagram` 与通用入口 `render_markup`——外加按需读取的 `read_threadframe_state`；`save_threadframe_state` 已设置 `visibility: ["app"]` 仅对前端按钮可见，减少模型选择负担。
+- **跨客户端主动调用引导**：服务端在 MCP 握手时通过 `instructions` 下发通用触发规则，各客户端可直接复制使用的 `AGENTS.md` / `CLAUDE.md` / Cursor Rule / Antigravity Skill 模板见 [docs/agent-prompts.md](docs/agent-prompts.md)。
 
 ## 变量、公式与安全边界
 

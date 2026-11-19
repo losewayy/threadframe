@@ -428,11 +428,13 @@ async function connectTestClient(name: string, capabilities: ClientCapabilities,
     };
     void clientTransport.send({ jsonrpc: "2.0", id: requestId, method, params }).catch((error) => { clearTimeout(timer); reject(error); });
   });
+  let instructions: unknown;
   try {
-    await request("initialize", { protocolVersion: "2025-11-25", capabilities, clientInfo: { name, version: "1.0.0" } });
+    const init = await request("initialize", { protocolVersion: "2025-11-25", capabilities, clientInfo: { name, version: "1.0.0" } });
+    instructions = init.instructions;
     await clientTransport.send({ jsonrpc: "2.0", method: "notifications/initialized" });
   } catch (error) { await server.close(); throw error; }
-  return { request, close: () => server.close() };
+  return { instructions, request, close: () => server.close() };
 }
 
 test("state snapshot tools stay local and are disabled over HTTP", async () => {
@@ -480,7 +482,6 @@ test("state snapshot tools stay local and are disabled over HTTP", async () => {
 
 test("real MCP sessions preserve native results and restrict embed writes to explicit local exports", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "threadframe-"));
-  const spec = UiSpecSchema.parse({ title: "Adapter contract", blocks: [{ kind: "callout", body: "Local export" }] });
   const resultSchema = z.object({ content: z.array(z.object({ type: z.literal("text"), text: z.string() })), isError: z.boolean().optional(), structuredContent: UiSpecSchema.optional() });
   const shortcuts = [
     { name: "present_calculator", arguments: { title: "Shortcut calculator", inputs: [{ kind: "slider", label: "A", min: 0, max: 10 }], metrics: [{ label: "Double", formula: "a * 2" }] } },
@@ -498,27 +499,32 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
     ]) {
       const client = await connectTestClient(scenario.name, scenario.capabilities, scenario.local);
       try {
+        assert.equal(typeof client.instructions, "string");
+        for (const name of ["present_calculator", "present_decision", "present_diagram", "render_markup"]) {
+          assert.ok((client.instructions as string).includes(name), `instructions should mention ${name}`);
+        }
         const embedPath = path.join(directory, `${scenario.name} space.html`);
-        const result = resultSchema.parse(await client.request("tools/call", { name: "render_threadframe", arguments: { ...spec, embedPath } }));
+        const result = resultSchema.parse(await client.request("tools/call", { name: markup.name, arguments: { ...markup.arguments, embedPath } }));
         if (scenario.name === "Native") {
-          assert.deepEqual(result.structuredContent, spec);
-          assert.equal(result.content[0].text, renderFallbackMarkdown(spec));
+          assert.equal(result.structuredContent?.title, "Markup scale");
+          assert.match(result.content[0].text, /Total 4/);
           const listing = await client.request("tools/list", {});
           const tools = z.array(z.object({
             name: z.string(), inputSchema: z.record(z.string(), z.unknown()),
-            _meta: z.object({ ui: z.object({ resourceUri: z.string() }).optional() }).optional(),
+            _meta: z.object({ ui: z.object({ resourceUri: z.string().optional(), visibility: z.array(z.string()).optional() }).optional() }).optional(),
           })).parse(listing.tools);
-          for (const name of ["render_threadframe", ...shortcuts.map((entry) => entry.name), "save_threadframe_state", "read_threadframe_state"]) {
+          for (const name of [...shortcuts.map((entry) => entry.name), "save_threadframe_state", "read_threadframe_state"]) {
             assert.ok(tools.some((tool) => tool.name === name), `${name} should be registered`);
           }
+          for (const retired of ["render_threadframe", "inspect_preset_frame"]) {
+            assert.ok(!tools.some((tool) => tool.name === retired), `${retired} should stay retired from MCP tool list`);
+          }
+          assert.deepEqual(tools.find((tool) => tool.name === "save_threadframe_state")?._meta?.ui?.visibility, ["app"]);
           for (const tool of tools) assert.ok(!JSON.stringify(tool.inputSchema).includes('"$ref"'), `${tool.name} schema has $ref`);
           for (const { name } of shortcuts) {
             const shortcutTool = tools.find((tool) => tool.name === name)!;
             assert.ok(JSON.stringify(shortcutTool.inputSchema).includes('"embedPath"'), `${name} should accept embedPath`);
           }
-          const schema = JSON.stringify(tools.find((tool) => tool.name === "render_threadframe")!.inputSchema);
-          for (const kind of ["controls", "stats", "svg", "timeline", "grid", "graph", "table", "box", "text", "icon"]) assert.ok(schema.includes(`"const":"${kind}"`));
-          assert.ok(!schema.includes('"$ref"'));
           assert.equal(tools.find((tool) => tool.name === markup.name)?._meta?.ui?.resourceUri, UI_RESOURCE_URI);
           const uiResource = await client.request("resources/read", { uri: UI_RESOURCE_URI });
           const bundle = z.array(z.object({ uri: z.string(), mimeType: z.string(), text: z.string() })).parse(uiResource.contents)[0];
@@ -581,8 +587,8 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.equal(rejectedShortcut.isError, true);
           assert.ok(rejectedShortcut.content[0].text.includes("unknown variable"));
           const rejected = resultSchema.parse(await client.request("tools/call", {
-            name: "render_threadframe",
-            arguments: { title: "Undeclared variable", blocks: [{ kind: "choices", options: [{ id: "bad", label: "Bad", setVars: { ghost: 1 } }] }] },
+            name: markup.name,
+            arguments: { title: "Undeclared variable", markup: '<choices><choice id="bad" label="Bad"><set var="ghost" value={1}/></choice></choices>' },
           }));
           assert.equal(rejected.isError, true);
           assert.ok(rejected.content[0].text.includes("setVars.ghost"));
@@ -592,7 +598,7 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           const html = await fs.readFile(embedPath, "utf8");
           assert.doesNotMatch(html, /<script\b[^>]*\bsrc\s*=/i);
           assert.ok(html.includes("window.__THREADFRAME_EMBED__ = true"));
-          assert.ok(html.includes(spec.title));
+          assert.ok(html.includes("Markup scale"));
         } else {
           assert.equal(result.isError, true);
           assert.ok(result.content[0].text.includes("local --stdio"));
@@ -645,14 +651,10 @@ test("real MCP sessions preserve native results and restrict embed writes to exp
           assert.equal(directSave.isError, true);
           assert.match(directSave.content[0].text, /MCP Apps clients over local --stdio/);
           for (const target of ["bad.json", "NUL.html", "CON/file.html", "device.html:stream", "\\\\.\\device.html"]) {
-            const rejected = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_frame", arguments: { preset: "agent-launch-kit", embedPath: target.startsWith("\\\\") ? target : path.join(directory, target) } }));
+            const rejected = resultSchema.parse(await client.request("tools/call", { name: markup.name, arguments: { ...markup.arguments, embedPath: target.startsWith("\\\\") ? target : path.join(directory, target) } }));
             assert.equal(rejected.isError, true, target);
           }
-          const presetPath = path.join(directory, "preset.html");
-          const preset = resultSchema.parse(await client.request("tools/call", { name: "inspect_preset_frame", arguments: { preset: "agent-launch-kit", embedPath: presetPath } }));
-          assert.equal(preset.isError, undefined);
-          assert.ok((await fs.readFile(presetPath, "utf8")).includes("__THREADFRAME_SPEC__"));
-          const noFile = resultSchema.parse(await client.request("tools/call", { name: "render_threadframe", arguments: spec }));
+          const noFile = resultSchema.parse(await client.request("tools/call", { name: markup.name, arguments: markup.arguments }));
           assert.ok(noFile.content[0].text.includes("embedPath"));
         }
       } finally { await client.close(); }
