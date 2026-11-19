@@ -78,6 +78,18 @@
   cursor: pointer;
 }
 
+.iui-range:focus-visible {
+  outline: none;
+}
+
+.iui-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--iui-focus) 38%, transparent), 0 0 0 1px var(--iui-focus), 0 1px 3px #0003;
+}
+
+.iui-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--iui-focus) 38%, transparent), 0 0 0 1px var(--iui-focus), 0 1px 3px #0003;
+}
+
 .iui-range::-webkit-slider-runnable-track {
   height: 5px;
   border-radius: 999px;
