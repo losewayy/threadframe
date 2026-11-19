@@ -60,11 +60,16 @@ test("markup supports declared presets, graph icons, and derived table columns",
   assert.equal(compiled.spec.actions?.[0].kind, "copy_state");
   assert.match(renderFallbackMarkdown(compiled.spec), /\b6\b/);
 
-  for (const input of [MARKUP_RECIPES.flow, MARKUP_RECIPES.curve, MARKUP_RECIPES.diagram, MARKUP_RECIPES.table]) {
+  for (const input of [MARKUP_RECIPES.flow, MARKUP_RECIPES.curve, MARKUP_RECIPES.diagram, MARKUP_RECIPES.table, MARKUP_RECIPES.stepper]) {
     const result = compileMarkup(input);
-    assert.ok(result.ok);
+    assert.ok(result.ok, result.ok ? "" : result.issues.join("\n"));
     assert.ok(UiSpecSchema.safeParse(result.spec).success);
   }
+  const stepper = compileMarkup(MARKUP_RECIPES.stepper);
+  assert.ok(stepper.ok);
+  const stepperMd = renderFallbackMarkdown(stepper.spec);
+  assert.match(stepperMd, /_Active line: 1_/);
+  assert.match(stepperMd, /Current stage: parse/);
 });
 
 test("markup errors point to the offending tag, attribute, or formula", () => {
@@ -202,6 +207,7 @@ test("markup derives omitted structural ids, accepts natural aliases, and compil
       case "layer": return `<architecture>${example}</architecture>`;
       case "component": return `<architecture><layer layer="Runtime">${example}</layer></architecture>`;
       case "button": return `<text>Hi</text>${example}`;
+      case "var": return `<slider id="n" label="N" min={1} max={10} default={2}/>${example}<text>{double_n}</text>`;
       case "slider":
       case "toggle":
       case "select": return example;
@@ -232,4 +238,48 @@ test("formatLayoutSummary flags compact cards vs overflowing multi-row tables", 
   const summary = formatLayoutSummary(dense.spec);
   assert.match(summary, /table 18 rows/);
   assert.match(summary, /exceeds ~450px comfort height/);
+});
+
+test("markup validates derived vars, selectVar bindings, active lines, and local actions", () => {
+  const linked = compileMarkup({
+    markup: `
+      <var id="doubled" formula={step * 2}/>
+      <slider id="step" label="Step" min={1} max={3} default={1}/>
+      <graph selectVar="node">
+        <node id="client" label="Client"/>
+        <node id="api" label="API"/>
+        <edge from="client" to="api" activeFormula={node == 'api'}/>
+      </graph>
+      <actions>
+        <button action="step_var" label="Next" var="step" delta={1}/>
+        <button action="set_var" label="Go API" var="node" value="api"/>
+      </actions>
+      <chart>
+        <bar label="Item" formula={doubled} activeFormula={node == 'client'}/>
+      </chart>
+      <plot mode="line" xMin={0} xMax={4} baseline>
+        <curve label="Y" formula={x * step}/>
+      </plot>
+      <code activeLineFormula={node == 'api' ? 2 : 1}>send()
+handle()</code>
+    `,
+  });
+  assert.ok(linked.ok, linked.ok ? "" : linked.issues.join("\n"));
+  assert.equal(linked.spec.vars?.[0].id, "doubled");
+  const md = renderFallbackMarkdown(linked.spec);
+  assert.match(md, /Item: 2/);
+  assert.match(md, /_Active line: 1_/);
+
+  const failures: Array<[string, RegExp]> = [
+    ['<var id="a" formula={b}/><var id="b" formula={1}/><text>{a}</text>', /unknown variable "b"/],
+    ['<slider id="x" label="X"/><var id="x" formula={1}/><text>{x}</text>', /duplicate or reserved variable id "x"/],
+    ['<var id="x" formula={1}/><graph selectVar="x"><node id="a" label="A"/></graph>', /duplicate variable id "x"/],
+    ['<slider id="x" label="X" min={1} max={5} default={2}/><var id="y" formula={x + 1}/><actions><button action="set_var" label="Bad" var="y" value={3}/></actions>', /cannot assign derived <var> "y"/],
+    ['<slider id="x" label="X" min={1} max={5} default={2}/><actions><button action="set_var" label="OOB" var="x" value={9}/></actions>', /expected a number from 1 to 5/],
+  ];
+  for (const [markup, pattern] of failures) {
+    const failed = compileMarkup({ markup });
+    assert.equal(failed.ok, false, markup);
+    assert.match(failed.issues.join("\n"), pattern);
+  }
 });

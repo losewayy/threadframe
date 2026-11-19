@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { hasCjkText } from "./runtime/display.js";
 import { evaluateFormula, evaluateNumericOrNull, formulaIdentifiers, type VarScope } from "./runtime/formula.js";
-import type { ControlItem, LeafBlock, UiBlock, UiSpec } from "./schema/uiSpec.js";
+import { DerivedVarSchema, type ControlItem, type LeafBlock, type UiBlock, type UiSpec } from "./schema/uiSpec.js";
 import { IconNameSchema } from "./schema/atoms.js";
 
 /**
@@ -46,6 +46,7 @@ export const CalculatorInputSchema = z.object({
   subtitle: z.string().optional(),
   badge: z.string().optional(),
   inputs: z.array(InputSchema).min(1),
+  vars: z.array(DerivedVarSchema).optional(),
   metrics: z.array(MetricSchema).optional(),
   bars: z.array(BarSchema).optional(),
   template: z.string().optional(),
@@ -79,6 +80,7 @@ export const DiagramInputSchema = z.object({
   subtitle: z.string().optional(),
   badge: z.string().optional(),
   direction: z.enum(["LR", "TB"]).optional(),
+  selectVar: IdSchema.optional(),
   nodes: z.array(z.object({
     id: IdSchema.optional(),
     label: z.string().min(1),
@@ -98,6 +100,7 @@ export const DiagramInputSchema = z.object({
     dashed: z.boolean().optional(),
   })).optional(),
   inputs: z.array(InputSchema).optional(),
+  vars: z.array(DerivedVarSchema).optional(),
   caption: z.string().optional(),
   statePath: z.string().optional(),
 });
@@ -242,10 +245,38 @@ function compileControls(
   return { controls, defaults };
 }
 
+function validateDerivedVars(
+  vars: readonly { id: string; formula: string }[],
+  known: Set<string>,
+  issues: string[],
+): void {
+  for (const item of vars) {
+    if (known.has(item.id)) {
+      issues.push(`var "${item.id}": duplicate variable id; give this var a unique name`);
+      continue;
+    }
+    if (!item.formula.trim()) {
+      issues.push(`var "${item.id}": formula is required`);
+    } else {
+      for (const name of formulaIdentifiers(item.formula)) {
+        if (!known.has(name)) issues.push(`var "${item.id}": unknown variable "${name}"; declare it before this var`);
+      }
+      const scope: VarScope = {};
+      for (const name of known) scope[name] = 0;
+      if (evaluateFormula(item.formula, scope) === null) {
+        issues.push(`var "${item.id}": formula is not valid`);
+      }
+    }
+    known.add(item.id);
+  }
+}
+
 export function compileCalculator(input: CalculatorInput): CompileResult {
   const issues: string[] = [];
   const { controls, defaults } = compileControls(input.inputs, issues);
   const known = new Set(Object.keys(defaults));
+  const vars = input.vars ?? [];
+  validateDerivedVars(vars, known, issues);
   const metrics = input.metrics ?? [];
   const bars = input.bars ?? [];
   if (!metrics.length && !bars.length) issues.push("provide at least one metric or bar to display");
@@ -306,6 +337,7 @@ export function compileCalculator(input: CalculatorInput): CompileResult {
       title: input.title,
       ...(input.subtitle ? { subtitle: input.subtitle } : {}),
       badge: input.badge ?? (zh ? "交互计算器" : "Interactive calculator"),
+      ...(vars.length ? { vars } : {}),
       blocks,
       actions: shortcutActions({
         statePath: input.statePath,
@@ -391,6 +423,12 @@ export function compileDiagram(input: DiagramInput): CompileResult {
     ? compileControls(input.inputs, issues)
     : { controls: [] as ControlItem[], defaults: {} };
   const known = new Set(Object.keys(defaults));
+  if (input.selectVar) {
+    if (known.has(input.selectVar)) issues.push(`selectVar "${input.selectVar}": duplicates an input id`);
+    known.add(input.selectVar);
+  }
+  const vars = input.vars ?? [];
+  validateDerivedVars(vars, known, issues);
   const used = new Set<string>();
   const nodes = input.nodes.map((node, index) => ({
     ...node,
@@ -432,6 +470,7 @@ export function compileDiagram(input: DiagramInput): CompileResult {
   if (controls.length) blocks.push({ kind: "controls", controls });
   blocks.push({
     kind: "graph",
+    ...(input.selectVar ? { selectVar: input.selectVar } : {}),
     direction: input.direction ?? "LR",
     nodes,
     edges: edges.map(({ activeFormula, dashed, label, from, to }) => ({
@@ -447,6 +486,7 @@ export function compileDiagram(input: DiagramInput): CompileResult {
       title: input.title,
       ...(input.subtitle ? { subtitle: input.subtitle } : {}),
       badge: input.badge ?? (zh ? "自动布局图" : "Auto-laid diagram"),
+      ...(vars.length ? { vars } : {}),
       blocks,
       actions: shortcutActions({
         statePath: input.statePath,

@@ -4,7 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { UiStateStore } from "../src/runtime/core/state.js";
+import { renderActions } from "../src/runtime/blocks/actions.js";
+import { renderChart } from "../src/runtime/blocks/chart.js";
 import { renderChoices } from "../src/runtime/blocks/choices.js";
+import { renderCode } from "../src/runtime/blocks/code.js";
+import { renderGraph } from "../src/runtime/blocks/graph.js";
+import { renderTable } from "../src/runtime/blocks/table.js";
+import { renderTimeline } from "../src/runtime/blocks/timeline.js";
+import { renderCurvePlot } from "../src/runtime/core/plotCurve.js";
 import { resolveSafeFilePath } from "../src/pathSafety.js";
 import { readSnapshot, writeSnapshot } from "../src/snapshot.js";
 import { UiSpecSchema } from "../src/schema/uiSpec.js";
@@ -190,5 +197,210 @@ test("choices defer option prompts until Apply when a submit action exists", asy
     assert.deepEqual([...multiState.selectedChoiceIds], ["auto", "cpu"]);
   } finally {
     (globalThis as { document?: unknown }).document = previousDocument;
+  }
+});
+
+test("derived vars, selectVar, code active lines, step_var/set_var, and baseline curves work together", async () => {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const previousButton = (globalThis as { HTMLButtonElement?: unknown }).HTMLButtonElement;
+  class MockButton {}
+  type MockNode = {
+    tagName: string;
+    className: string;
+    textContent: string;
+    type: string;
+    hidden: boolean;
+    tabIndex: number;
+    parent: MockNode | null;
+    children: MockNode[];
+    attributes: Map<string, string>;
+    style: Record<string, string> & { setProperty: (k: string, v: string) => void };
+    classList: {
+      add: (name: string) => void;
+      toggle: (name: string, force?: boolean) => void;
+      contains: (name: string) => boolean;
+    };
+    setAttribute: (k: string, v: string) => void;
+    getAttribute: (k: string) => string | null;
+    removeAttribute: (k: string) => void;
+    append: (...nodes: MockNode[]) => void;
+    appendChild: (child: MockNode) => MockNode;
+    replaceChildren: (...nodes: MockNode[]) => void;
+    remove: () => void;
+    addEventListener: (event: string, fn: (event?: unknown) => void) => void;
+    click: () => void;
+    querySelectorAll: (selector: string) => MockNode[];
+  };
+  const makeNode = (tag = "div"): MockNode => {
+    const listeners = new Map<string, Array<(event?: unknown) => void>>();
+    const classes = new Set<string>();
+    const syncClass = (node: MockNode) => {
+      for (const name of node.className.split(/\s+/).filter(Boolean)) classes.add(name);
+    };
+    const base = tag === "button" ? new MockButton() : {};
+    const node: MockNode = Object.assign(base, {
+      tagName: tag,
+      className: "",
+      textContent: "",
+      type: "",
+      hidden: false,
+      tabIndex: 0,
+      parent: null,
+      children: [],
+      attributes: new Map<string, string>(),
+      style: Object.assign(Object.create(null), {
+        setProperty: (k: string, v: string) => { node.style[k] = v; },
+      }),
+      classList: {
+        add: (name: string) => { syncClass(node); classes.add(name); },
+        toggle: (name: string, force?: boolean) => {
+          syncClass(node);
+          if (force === undefined ? !classes.has(name) : force) classes.add(name);
+          else classes.delete(name);
+        },
+        contains: (name: string) => { syncClass(node); return classes.has(name); },
+      },
+      setAttribute: (k: string, v: string) => {
+        node.attributes.set(k, v);
+        if (k === "class") node.className = v;
+      },
+      getAttribute: (k: string) => node.attributes.get(k) ?? null,
+      removeAttribute: (k: string) => { node.attributes.delete(k); },
+      append: (...nodes: MockNode[]) => {
+        for (const child of nodes) { child.parent = node; node.children.push(child); }
+      },
+      appendChild: (child: MockNode) => { child.parent = node; node.children.push(child); return child; },
+      replaceChildren: (...nodes: MockNode[]) => {
+        for (const child of nodes) child.parent = node;
+        node.children = [...nodes];
+      },
+      remove: () => {
+        if (node.parent) node.parent.children = node.parent.children.filter((child) => child !== node);
+      },
+      addEventListener: (event: string, fn: (event?: unknown) => void) => {
+        listeners.set(event, [...(listeners.get(event) ?? []), fn]);
+      },
+      click: () => { for (const fn of listeners.get("click") ?? []) fn({}); },
+      querySelectorAll: () => [],
+    }) as MockNode;
+    return node;
+  };
+  (globalThis as { HTMLButtonElement?: unknown }).HTMLButtonElement = MockButton;
+  const walk = (root: MockNode, pred: (n: MockNode) => boolean, out: MockNode[] = []): MockNode[] => {
+    if (pred(root)) out.push(root);
+    for (const child of root.children) if (child && Array.isArray(child.children)) walk(child, pred, out);
+    return out;
+  };
+  (globalThis as { document?: unknown }).document = {
+    createElement: (tag: string) => makeNode(tag),
+    createElementNS: (_ns: string, tag: string) => makeNode(tag),
+    createTextNode: (text: string) => Object.assign(makeNode("#text"), { textContent: text }),
+  };
+
+  try {
+    const linkedSpec = UiSpecSchema.parse({
+      title: "Step & select demo",
+      vars: [
+        { id: "line", formula: "stage == 'compile' ? 2 : stage == 'emit' ? 3 : 1" },
+        { id: "doubled", formula: "step * 2" },
+      ],
+      blocks: [
+        { kind: "controls", controls: [{ kind: "slider", id: "step", label: "Step", min: 1, max: 3, defaultValue: 1 }] },
+        { kind: "timeline", selectVar: "stage", steps: [
+          { id: "parse", title: "Parse", status: "active" },
+          { id: "compile", title: "Compile", status: "pending", detail: "Lower IR" },
+          { id: "emit", title: "Emit", status: "pending" },
+        ] },
+        { kind: "graph", selectVar: "node", nodes: [
+          { id: "n1", label: "Frontend" },
+          { id: "n2", label: "Backend" },
+        ], edges: [{ from: "n1", to: "n2", activeFormula: "node == 'n2'" }] },
+        { kind: "table", selectVar: "rowPick", columns: [{ key: "name", label: "Name" }], rows: [
+          { id: "first", values: { name: "Alpha" } },
+          { id: "second", values: { name: "Beta" } },
+        ] },
+        { kind: "chart", bars: [{ label: "Value", formula: "doubled", activeFormula: "node == 'n2'" }] },
+        { kind: "code", code: "a()\nb()\nc()", activeLineFormula: "line" },
+        { kind: "actions", buttons: [
+          { kind: "step_var", label: "Next step", var: "step", delta: 1 },
+          { kind: "step_var", label: "Wrap stage", var: "stage", delta: 1, wrap: true },
+          { kind: "set_var", label: "Reset", var: "step", value: 1 },
+        ] },
+        { kind: "plot", mode: "line", xMin: 0, xMax: 4, baseline: true, curves: [{ label: "Y", formula: "x * step" }] },
+      ],
+    });
+
+    const copied: string[] = [];
+    const state = new UiStateStore({}, () => {}, async (text) => { copied.push(text); return true; });
+    state.initDefaults(linkedSpec.blocks);
+    state.setDerivedVars(linkedSpec.vars);
+    const context = state.createContext(() => makeNode() as unknown as HTMLElement);
+    const timelineEl = renderTimeline(linkedSpec.blocks[1] as Extract<typeof linkedSpec.blocks[number], { kind: "timeline" }>, context) as unknown as MockNode;
+    const graphEl = renderGraph(linkedSpec.blocks[2] as Extract<typeof linkedSpec.blocks[number], { kind: "graph" }>, context) as unknown as MockNode;
+    const tableEl = renderTable(linkedSpec.blocks[3] as Extract<typeof linkedSpec.blocks[number], { kind: "table" }>, context) as unknown as MockNode;
+    const chartEl = renderChart(linkedSpec.blocks[4] as Extract<typeof linkedSpec.blocks[number], { kind: "chart" }>, context) as unknown as MockNode;
+    const codeEl = renderCode(linkedSpec.blocks[5] as Extract<typeof linkedSpec.blocks[number], { kind: "code" }>, context) as unknown as MockNode;
+    const actionsEl = renderActions(linkedSpec.blocks[6] as Extract<typeof linkedSpec.blocks[number], { kind: "actions" }>, context) as unknown as MockNode;
+    const plotEl = renderCurvePlot(linkedSpec.blocks[7] as Extract<typeof linkedSpec.blocks[number], { kind: "plot" }>, context) as unknown as MockNode;
+    state.activateBindings([context]);
+    state.notifyScopeChange();
+
+    assert.equal(state.scope.line, 1);
+    assert.equal(state.scope.doubled, 2);
+    assert.equal(state.summarize(), "Defaults: Step: 1, stage: parse, node: n1, rowPick: first");
+
+    const codeLines = walk(codeEl, (n) => n.classList.contains("iui-code-line"));
+    assert.equal(codeLines.length, 3);
+    assert.equal(codeLines[0].classList.contains("active"), true);
+    assert.equal(codeLines[0].getAttribute("aria-current"), "step");
+    const copyBtn = walk(codeEl, (n) => n.tagName === "button")[0];
+    copyBtn.click();
+    await Promise.resolve();
+    assert.equal(copied[0], "a()\nb()\nc()");
+
+    // Clicking timeline step updates scope.stage -> derived scope.line -> active code line
+    const stepButtons = walk(timelineEl, (n) => n.tagName === "button");
+    assert.equal(stepButtons.length, 3);
+    stepButtons[1].click();
+    assert.equal(state.scope.stage, "compile");
+    assert.equal(state.scope.line, 2);
+    assert.equal(codeLines[1].classList.contains("active"), true);
+
+    // Clicking graph node updates scope.node -> chart bar activeFormula
+    const graphNodes = walk(graphEl, (n) => n.classList.contains("iui-graph-node"));
+    graphNodes[1].click();
+    assert.equal(state.scope.node, "n2");
+    const barRow = walk(chartEl, (n) => n.classList.contains("iui-bar-row"))[0];
+    assert.equal(barRow.classList.contains("active"), true);
+
+    // Clicking table row updates scope.rowPick
+    const tableRows = walk(tableEl, (n) => n.tagName === "tr" && n.classList.contains("selectable"));
+    assert.equal(tableRows.length, 2);
+    tableRows[1].click();
+    assert.equal(state.scope.rowPick, "second");
+
+    // Local step_var and set_var actions mutate scope, wrap strings, and reverse-sync timeline
+    const actionBtns = walk(actionsEl, (n) => n.tagName === "button");
+    actionBtns[0].click(); // Next step -> step = 2, doubled = 4
+    assert.equal(state.scope.step, 2);
+    assert.equal(state.scope.doubled, 4);
+    actionBtns[1].click(); // Wrap stage compile -> emit
+    assert.equal(state.scope.stage, "emit");
+    assert.equal(stepButtons[2].getAttribute("aria-pressed"), "true");
+    actionBtns[1].click(); // Wrap stage emit -> parse
+    assert.equal(state.scope.stage, "parse");
+    actionBtns[2].click(); // Reset step -> 1
+    assert.equal(state.scope.step, 1);
+
+    // Plot baseline freeze & clear
+    const baselineBtn = walk(plotEl, (n) => n.tagName === "button")[0];
+    assert.equal(walk(plotEl, (n) => n.classList.contains("baseline")).length, 0);
+    baselineBtn.click();
+    assert.equal(walk(plotEl, (n) => n.classList.contains("baseline")).length, 1);
+    baselineBtn.click();
+    assert.equal(walk(plotEl, (n) => n.classList.contains("baseline")).length, 0);
+  } finally {
+    (globalThis as { document?: unknown }).document = previousDocument;
+    (globalThis as { HTMLButtonElement?: unknown }).HTMLButtonElement = previousButton;
   }
 });

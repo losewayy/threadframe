@@ -10,8 +10,8 @@ import {
   markupTags, atomicTags, autoIdTags, tagUsageHint, type BlockLevel, type ChildRule, type MarkupTag,
 } from "./markupTags.js";
 import {
-  InnerBoxBlockSchema, UiSpecSchema, choiceAssignmentIssues, declaredControls, walkBlocks,
-  type ControlItem, type PartialUiSpecResult, type UiBlock, type UiSpec,
+  InnerBoxBlockSchema, UiSpecSchema, actionAssignmentIssues, choiceAssignmentIssues, declaredControls,
+  declaredSelectVars, walkBlocks, type ControlItem, type DerivedVar, type PartialUiSpecResult, type UiBlock, type UiSpec,
 } from "./uiSpec.js";
 
 const MAX_MARKUP = 32_768;
@@ -89,11 +89,29 @@ function readBody(element: MarkupElement): { text: string; offset: number } {
   return { text: source.trim(), offset: offset + source.length - source.trimStart().length };
 }
 
+function toUiAction(fields: Fields): Action {
+  return {
+    kind: fields.action as Action["kind"],
+    label: String(fields.label),
+    ...(fields.promptTemplate !== undefined ? { promptTemplate: fields.promptTemplate as string } : {}),
+    ...(fields.var !== undefined ? { var: fields.var as string } : {}),
+    ...(fields.value !== undefined ? { value: fields.value as Action["value"] } : {}),
+    ...(fields.delta !== undefined ? { delta: fields.delta as number } : {}),
+    ...(fields.min !== undefined ? { min: fields.min as number } : {}),
+    ...(fields.max !== undefined ? { max: fields.max as number } : {}),
+    ...(fields.wrap !== undefined ? { wrap: fields.wrap as boolean } : {}),
+  };
+}
+
 class MarkupCompiler {
   readonly actions: Action[] = [];
+  readonly vars: DerivedVar[] = [];
   readonly issues: string[] = [];
   pending = false;
   private readonly formulas: FormulaSource[] = [];
+  private readonly varFormulas: Array<{ id: string; source: FormulaSource }> = [];
+  private readonly varOffsets = new Map<string, number>();
+  private readonly selectVarOffsets = new Map<string, number>();
   private readonly controls = new Set<string>();
   private readonly assignments = new Map<string, number>();
 
@@ -117,11 +135,13 @@ class MarkupCompiler {
     }
     const subtitle = input.subtitle ?? (metadata.subtitle as string | undefined);
     const badge = input.badge ?? (metadata.badge as string | undefined);
+    const blocks = this.blocks(nodes, "root");
     return {
       title: input.title?.trim() || String(metadata.title ?? "").trim() || "Interactive view",
       ...(subtitle === undefined ? {} : { subtitle }),
       ...(badge === undefined ? {} : { badge }),
-      blocks: this.blocks(nodes, "root"),
+      ...(this.vars.length ? { vars: this.vars } : {}),
+      blocks,
     };
   }
 
@@ -161,12 +181,28 @@ class MarkupCompiler {
           return;
         }
         flush();
+        if (node.name === "var") {
+          if (level !== "root") fail(node.offset, "move <var> to the top level of the card");
+          const first = this.formulas.length;
+          const parsed = this.element(node, tag);
+          const captured = this.formulas.splice(first);
+          if (parsed) {
+            const id = String(parsed.id);
+            const at = node.attrs.get("id")?.offset ?? node.offset;
+            if (["true", "false", "__proto__"].includes(id) || this.varOffsets.has(id) || this.controls.has(id)) {
+              this.record(at, `duplicate or reserved variable id "${id}"; give this <var> a unique name`);
+            } else {
+              this.varOffsets.set(id, at);
+              this.vars.push(parsed as DerivedVar);
+              if (captured[0]) this.varFormulas.push({ id, source: captured[0] });
+            }
+          }
+          return;
+        }
         if (node.name === "button" && level === "root") {
           if (this.partial) return;
           const action = this.element(node, tag);
-          if (action) this.actions.push({
-            kind: action.action as Action["kind"], label: String(action.label), promptTemplate: action.promptTemplate as string | undefined,
-          });
+          if (action) this.actions.push(toUiAction(action));
           return;
         }
         if (!tag.block) fail(node.offset, `<${node.name}> belongs inside its parent widget`);
@@ -210,8 +246,10 @@ class MarkupCompiler {
         if (formulaField(field)) {
           this.formulas.push({
             expression: String(fields[field]), field: where, offset: attribute.offset,
-            numeric: numericFormulaTags.has(element.name),
+            numeric: numericFormulaTags.has(element.name) || (element.name === "code" && field === "activeLineFormula"),
           });
+        } else if (field === "selectVar" && typeof fields[field] === "string" && !this.selectVarOffsets.has(String(fields[field]))) {
+          this.selectVarOffsets.set(String(fields[field]), attribute.offset);
         }
       } catch (error) {
         if (!(error instanceof MarkupSyntaxError)) throw error;
@@ -343,7 +381,7 @@ class MarkupCompiler {
   }
 
   private appendChild(element: MarkupElement, fields: Fields, rule: ChildRule, child: Fields): void {
-    const value = rule.value === undefined ? child : child[rule.value];
+    const value = element.name === "button" ? toUiAction(child) : rule.value === undefined ? child : child[rule.value];
     if (rule.key) {
       const key = String(child[rule.key]);
       const offset = element.attrs.get(rule.key)?.offset ?? element.offset;
@@ -422,9 +460,26 @@ class MarkupCompiler {
   }
 
   validate(spec: UiSpec): void {
+    const controls = declaredControls(spec.blocks);
     const scope: VarScope = Object.fromEntries(
-      [...declaredControls(spec.blocks)].map(([id, control]) => [id, control.defaultValue]),
+      [...controls].map(([id, control]) => [id, control.defaultValue]),
     );
+    for (const [id, selected] of declaredSelectVars(spec.blocks)) {
+      if (controls.has(id) || this.varOffsets.has(id)) {
+        this.record(this.selectVarOffsets.get(id) ?? 0, `duplicate variable id "${id}"; selectVar must not collide with a control or <var>`);
+        continue;
+      }
+      scope[id] = selected.initial;
+    }
+    for (const item of this.varFormulas) {
+      if (controls.has(item.id)) {
+        this.record(this.varOffsets.get(item.id) ?? item.source.offset, `duplicate variable id "${item.id}"; give this <var> a unique name`);
+        continue;
+      }
+      const issue = formulaIssue(item.source, scope);
+      if (issue) this.record(item.source.offset, `${item.source.field}: ${issue}`);
+      scope[item.id] = evaluateFormula(item.source.expression, scope) ?? 0;
+    }
     for (const formula of this.formulas) {
       const issue = formulaIssue(formula, scope);
       if (issue) this.record(formula.offset, `${formula.field}: ${issue}`);
@@ -432,6 +487,9 @@ class MarkupCompiler {
     for (const issue of choiceAssignmentIssues(spec.blocks)) {
       const location = [...this.assignments].find(([field]) => issue.startsWith(field));
       this.record(location?.[1] ?? 0, issue);
+    }
+    for (const issue of actionAssignmentIssues(spec.blocks, spec.actions, spec.vars)) {
+      this.record(0, issue);
     }
   }
 }

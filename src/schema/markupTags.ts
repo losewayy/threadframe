@@ -1,9 +1,10 @@
 import { z } from "zod";
 import {
-  AccordionBlockSchema, ArchitectureBlockSchema, ArchitectureLayerSchema, ArchitectureNodeSchema,
+  AccordionBlockSchema, ActionsBlockSchema, ArchitectureBlockSchema, ArchitectureLayerSchema, ArchitectureNodeSchema,
   BoxBlockSchema, CalloutBlockSchema, ChartBarSchema, ChartBlockSchema, ChecklistBlockSchema, ChecklistItemSchema,
   ChoiceOptionSchema, ChoicesBlockSchema, CompareBlockSchema, CompareRowSchema, ControlsBlockSchema,
-  DerivedMetricSchema, GridBlockSchema, SelectControlSchema, SliderControlSchema, TabsBlockSchema, ToggleControlSchema,
+  DerivedMetricSchema, DerivedVarSchema, GridBlockSchema, SelectControlSchema, SliderControlSchema, TabsBlockSchema,
+  ToggleControlSchema,
 } from "./uiSpec.js";
 import { AtomicLeafBlockSchema } from "./atoms.js";
 import { CodeBlockSchema, StatItemSchema, StatsBlockSchema, TimelineBlockSchema, TimelineStepSchema } from "./content.js";
@@ -70,6 +71,8 @@ const examples: Record<string, string> = {
   component: '<component label="Compiler" role="Validator"/>',
   callout: '<callout title="Note" tone="info">Details here</callout>',
   code: '<code language="ts">const x = 1;</code>',
+  var: '<var id="double_n" formula={n * 2}/>',
+  actions: '<actions><button action="step_var" label="Next" var="n" delta={1}/></actions>',
   button: '<button action="send_message" label="Apply" promptTemplate="Apply choice"/>',
   text: '<text>Use **bold** and {n * 2}.</text>',
   title: '<title>Heading</title>',
@@ -128,9 +131,19 @@ const tags = new Map<string, MarkupTag>([
   ["component", { schema: ArchitectureNodeSchema }],
   ["callout", { schema: CalloutBlockSchema, block: true, body: "literal" }],
   ["code", { schema: CodeBlockSchema, block: true, body: "code" }],
+  ["var", { schema: DerivedVarSchema }],
+  ["actions", { schema: ActionsBlockSchema, block: true, list: [{ tag: "button", field: "buttons" }] }],
   ["frame", { schema: z.object({ title: z.string().optional(), subtitle: z.string().optional(), badge: z.string().optional() }) }],
   ["button", { schema: z.object({
-    action: z.enum(["send_message", "copy_state"]), label: z.string().min(1), promptTemplate: z.string().optional(),
+    action: z.enum(["send_message", "copy_state", "set_var", "step_var"]),
+    label: z.string().min(1),
+    promptTemplate: z.string().optional(),
+    var: z.string().optional(),
+    value: scalar.optional(),
+    delta: z.number().optional(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    wrap: z.boolean().optional(),
   }) }],
 ]);
 

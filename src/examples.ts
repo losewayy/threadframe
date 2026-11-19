@@ -58,6 +58,22 @@ export const MARKUP_RECIPES = {
   <row><cell column="worker" value="Worker B"/><cell column="slots" value={5}/></row>
 </table>`,
   },
+  stepper: {
+    title: "Step through a 3-stage trace",
+    markup: `<slider id="step" label="Step" min={1} max={3} default={1}/>
+<var id="stage" formula={step == 1 ? 'parse' : step == 2 ? 'compile' : 'emit'}/>
+<actions>
+  <button action="step_var" label="Prev" var="step" delta={-1}/>
+  <button action="step_var" label="Next" var="step" delta={1}/>
+  <button action="set_var" label="Reset" var="step" value={1}/>
+</actions>
+<code language="ts" activeLineFormula={step}>const ast = parse(src);
+const ir = lower(ast);
+return emit(ir);</code>
+<stats>
+  <stat label="Current stage" formula={stage} tone="accent"/>
+</stats>`,
+  },
 };
 
 export const SVG_EXAMPLES: Record<string, UiSpec> = {
