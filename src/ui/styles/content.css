@@ -171,6 +171,36 @@
 
 .iui-code code { font-family: inherit; }
 
+.iui-code-line {
+  display: grid;
+  grid-template-columns: 2.5ch minmax(0, 1fr);
+  gap: 10px;
+  padding: 1px 6px;
+  margin: 0 -6px;
+  border-inline-start: 2px solid transparent;
+  border-radius: 3px;
+}
+
+.iui-code-line.active {
+  background: color-mix(in srgb, var(--iui-accent) 14%, transparent);
+  border-inline-start-color: var(--iui-accent);
+}
+
+.iui-code-ln {
+  color: var(--iui-muted);
+  text-align: end;
+  user-select: none;
+  opacity: .75;
+}
+
+.iui-code-line.active .iui-code-ln {
+  color: var(--iui-accent);
+  font-weight: 650;
+  opacity: 1;
+}
+
+.iui-code-src { white-space: pre; }
+
 .iui-code-caption {
   margin: 8px 0 0;
   color: var(--iui-muted);

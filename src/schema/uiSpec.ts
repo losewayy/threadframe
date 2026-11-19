@@ -81,10 +81,16 @@ export const ChoicesBlockSchema = z.object({
   options: z.array(ChoiceOptionSchema).min(1),
 });
 
+export const DerivedVarSchema = z.object({
+  id: z.string().regex(/^[A-Za-z_]\w*$/),
+  formula: z.string().min(1),
+});
+
 export const ChartBarSchema = z.object({
   label: z.string(),
   value: z.number().optional(),
   formula: z.string().optional(),
+  activeFormula: z.string().optional(),
   unit: z.string().optional(),
   tone: z.enum(["primary", "accent", "success", "warn"]).optional(),
 });
@@ -147,6 +153,7 @@ export const ArchitectureBlockSchema = z.object({
   kind: z.literal("architecture"),
   id: z.string().optional(),
   title: z.string().optional(),
+  selectVar: z.string().regex(/^[A-Za-z_]\w*$/).optional(),
   layers: z.array(ArchitectureLayerSchema).min(1),
 });
 
@@ -159,6 +166,26 @@ export const CalloutBlockSchema = z.object({
   items: z.array(z.string()).optional(),
 });
 
+export const UiActionSchema = z.object({
+  label: z.string(),
+  kind: z.enum(["send_message", "copy_state", "save_state", "set_var", "step_var"]).optional(),
+  promptTemplate: z.string().optional(),
+  statePath: z.string().optional(),
+  var: z.string().optional(),
+  value: z.union([z.number(), z.string(), z.boolean()]).optional(),
+  delta: z.number().optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  wrap: z.boolean().optional(),
+});
+
+export const ActionsBlockSchema = z.object({
+  kind: z.literal("actions"),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  buttons: z.array(UiActionSchema).min(1),
+});
+
 export const LeafBlockSchema = z.discriminatedUnion("kind", [
   ChoicesBlockSchema,
   ControlsBlockSchema,
@@ -167,6 +194,7 @@ export const LeafBlockSchema = z.discriminatedUnion("kind", [
   ChecklistBlockSchema,
   ArchitectureBlockSchema,
   CalloutBlockSchema,
+  ActionsBlockSchema,
   PlotBlockSchema,
   SvgBlockSchema,
   StatsBlockSchema,
@@ -234,13 +262,6 @@ export const UiBlockSchema = z.discriminatedUnion("kind", [
   ...LeafBlockSchema.options, BoxBlockSchema, GridBlockSchema, TabsBlockSchema, AccordionBlockSchema,
 ]);
 
-export const UiActionSchema = z.object({
-  label: z.string(),
-  kind: z.enum(["send_message", "copy_state", "save_state"]).optional(),
-  promptTemplate: z.string().optional(),
-  statePath: z.string().optional(),
-});
-
 export const LayoutSummarySchema = z.object({
   estimatedPx: z.number().int().nonnegative(),
   overflows: z.boolean(),
@@ -254,16 +275,26 @@ export const UiSpecSchema = z.object({
   title: z.string(),
   subtitle: z.string().optional(),
   badge: z.string().optional(),
+  vars: z.array(DerivedVarSchema).optional(),
   blocks: z.array(UiBlockSchema).min(1),
   actions: z.array(UiActionSchema).optional(),
   layout: LayoutSummarySchema.optional(),
 });
 
 export type LayoutSummary = z.infer<typeof LayoutSummarySchema>;
+export type DerivedVar = z.infer<typeof DerivedVarSchema>;
+export type UiAction = z.infer<typeof UiActionSchema>;
 export type UiSpec = z.infer<typeof UiSpecSchema>;
 export type UiBlock = z.infer<typeof UiBlockSchema>;
 export type LeafBlock = z.infer<typeof LeafBlockSchema>;
 export type ControlItem = z.infer<typeof ControlItemSchema>;
+
+export interface DeclaredSelectVar {
+  id: string;
+  label: string;
+  initial: string;
+  values: string[];
+}
 
 export function walkBlocks(blocks: readonly UiBlock[], visitor: (block: UiBlock) => void): void {
   for (const block of blocks) {
@@ -277,7 +308,7 @@ export function walkBlocks(blocks: readonly UiBlock[], visitor: (block: UiBlock)
   }
 }
 
-/** Collects every declared control so choice assignments can be checked against real variables. */
+/** Collects every declared control so choice and action assignments can be checked against real variables. */
 export function declaredControls(blocks: readonly UiBlock[]): Map<string, ControlItem> {
   const declared = new Map<string, ControlItem>();
   walkBlocks(blocks, (block) => {
@@ -286,32 +317,113 @@ export function declaredControls(blocks: readonly UiBlock[]): Map<string, Contro
   return declared;
 }
 
+/** Collects interactive `selectVar` bindings from graphs, architectures, timelines, and tables. */
+export function declaredSelectVars(blocks: readonly UiBlock[]): Map<string, DeclaredSelectVar> {
+  const declared = new Map<string, DeclaredSelectVar>();
+  walkBlocks(blocks, (block) => {
+    if (block.kind === "graph" && block.selectVar) {
+      const values = block.nodes.map((node) => node.id);
+      if (values.length) declared.set(block.selectVar, { id: block.selectVar, label: block.title ?? block.selectVar, initial: values[0], values });
+    } else if (block.kind === "architecture" && block.selectVar) {
+      const values = block.layers.flatMap((layer) => layer.nodes.map((node) => node.id));
+      if (values.length) declared.set(block.selectVar, { id: block.selectVar, label: block.title ?? block.selectVar, initial: values[0], values });
+    } else if (block.kind === "timeline" && block.selectVar) {
+      const values = block.steps.map((step) => step.id);
+      const initial = (block.steps.find((step) => step.status === "active") ?? block.steps[0])?.id;
+      if (values.length && initial) declared.set(block.selectVar, { id: block.selectVar, label: block.title ?? block.selectVar, initial, values });
+    } else if (block.kind === "table" && block.selectVar) {
+      const values = block.rows.map((row, index) => row.id ?? `row_${index + 1}`);
+      if (values.length) declared.set(block.selectVar, { id: block.selectVar, label: block.title ?? block.selectVar, initial: values[0], values });
+    }
+  });
+  return declared;
+}
+
+function variableValueIssue(
+  path: string,
+  id: string,
+  value: unknown,
+  controls: ReadonlyMap<string, ControlItem>,
+  selectVars: ReadonlyMap<string, DeclaredSelectVar>,
+): string | undefined {
+  const control = controls.get(id);
+  if (control) {
+    if (control.kind === "toggle" && typeof value !== "boolean") return `${path}: expected a boolean`;
+    if (control.kind === "select" && (typeof value !== "string" || !control.options.includes(value))) {
+      return `${path}: expected one of ${control.options.join(", ")}`;
+    }
+    if (control.kind === "slider"
+      && (typeof value !== "number" || !Number.isFinite(value) || value < control.min || value > control.max)) {
+      return `${path}: expected a number from ${control.min} to ${control.max}`;
+    }
+    return undefined;
+  }
+  const selected = selectVars.get(id);
+  if (selected) {
+    if (typeof value !== "string" || !selected.values.includes(value)) {
+      return `${path}: expected one of ${selected.values.join(", ")}`;
+    }
+    return undefined;
+  }
+  return `${path}: no controls block declares this variable (or selectVar)`;
+}
+
 /**
  * Checks `choices[].options[].setVars` against declared controls and their domains.
  * Returns readable issues instead of throwing so tool handlers can reject bad specs with context.
  */
 export function choiceAssignmentIssues(blocks: readonly UiBlock[]): string[] {
   const declared = declaredControls(blocks);
+  const selectVars = declaredSelectVars(blocks);
   const issues: string[] = [];
   walkBlocks(blocks, (block) => {
     if (block.kind !== "choices") return;
     for (const option of block.options) {
       for (const [id, value] of Object.entries(option.setVars ?? {})) {
-        const path = `choices "${option.id}" setVars.${id}`;
-        const control = declared.get(id);
-        if (!control) {
-          issues.push(`${path}: no controls block declares this variable`);
-        } else if (control.kind === "toggle" && typeof value !== "boolean") {
-          issues.push(`${path}: expected a boolean`);
-        } else if (control.kind === "select" && (typeof value !== "string" || !control.options.includes(value))) {
-          issues.push(`${path}: expected one of ${control.options.join(", ")}`);
-        } else if (control.kind === "slider"
-          && (typeof value !== "number" || !Number.isFinite(value) || value < control.min || value > control.max)) {
-          issues.push(`${path}: expected a number from ${control.min} to ${control.max}`);
-        }
+        const issue = variableValueIssue(`choices "${option.id}" setVars.${id}`, id, value, declared, selectVars);
+        if (issue) issues.push(issue);
       }
     }
   });
+  return issues;
+}
+
+/** Checks `set_var` and `step_var` actions against editable controls and `selectVar` bindings. */
+export function actionAssignmentIssues(
+  blocks: readonly UiBlock[],
+  actions: readonly UiAction[] = [],
+  derivedVars: readonly DerivedVar[] = [],
+): string[] {
+  const controls = declaredControls(blocks);
+  const selectVars = declaredSelectVars(blocks);
+  const derivedIds = new Set(derivedVars.map((item) => item.id));
+  const collected: UiAction[] = [...actions];
+  walkBlocks(blocks, (block) => {
+    if (block.kind === "actions") collected.push(...block.buttons);
+  });
+  const issues: string[] = [];
+  for (const action of collected) {
+    if (action.kind !== "set_var" && action.kind !== "step_var") continue;
+    const where = `button "${action.label}"`;
+    if (!action.var) {
+      issues.push(`${where}: var is required for ${action.kind}`);
+      continue;
+    }
+    if (derivedIds.has(action.var)) {
+      issues.push(`${where}: cannot assign derived <var> "${action.var}"; target an input control or selectVar`);
+      continue;
+    }
+    if (action.kind === "set_var") {
+      if (action.value === undefined) {
+        issues.push(`${where}: value is required for set_var`);
+        continue;
+      }
+      const issue = variableValueIssue(`${where} (${action.var})`, action.var, action.value, controls, selectVars);
+      if (issue) issues.push(issue);
+    } else if (!controls.has(action.var) && !selectVars.has(action.var)) {
+      issues.push(`${where}: unknown variable "${action.var}"; declare it with a control or selectVar`);
+    }
+  }
   return issues;
 }
 
@@ -319,8 +431,9 @@ export interface PartialUiSpecResult {
   title: string;
   subtitle?: string;
   badge?: string;
+  vars?: DerivedVar[];
   blocks: UiBlock[];
-  actions: z.infer<typeof UiActionSchema>[];
+  actions: UiAction[];
   pendingBlockCount: number;
   isComplete: boolean;
 }
@@ -399,11 +512,20 @@ export function parsePartialUiSpec(raw: unknown): PartialUiSpecResult {
       title: full.data.title,
       subtitle: full.data.subtitle,
       badge: full.data.badge,
+      ...(full.data.vars?.length ? { vars: full.data.vars } : {}),
       blocks: full.data.blocks,
       actions: full.data.actions ?? [],
       pendingBlockCount: 0,
       isComplete: true,
     };
+  }
+
+  const vars: DerivedVar[] = [];
+  if (Array.isArray(record.vars)) {
+    for (const item of record.vars) {
+      const parsed = DerivedVarSchema.safeParse(item);
+      if (parsed.success) vars.push(parsed.data);
+    }
   }
 
   const validBlocks: UiBlock[] = [];
@@ -435,6 +557,7 @@ export function parsePartialUiSpec(raw: unknown): PartialUiSpecResult {
     title: typeof record.title === "string" && record.title.trim() ? record.title : "Building interactive view...",
     subtitle: typeof record.subtitle === "string" ? record.subtitle : undefined,
     badge: typeof record.badge === "string" ? record.badge : undefined,
+    ...(vars.length ? { vars } : {}),
     blocks: validBlocks,
     actions,
     pendingBlockCount,

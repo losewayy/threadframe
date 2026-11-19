@@ -47,6 +47,7 @@ export class ThreadFrameRenderer {
     this.state.setHeader(parsed.title, parsed.subtitle);
     this.state.hasSubmitAction = parsed.actions.some((action) => action.kind === "send_message" || action.kind === "save_state");
     this.state.initDefaults(parsed.blocks);
+    this.state.setDerivedVars(parsed.vars);
     if (!this.shell) {
       this.shell = el("div", "iui-shell");
       this.root.replaceChildren(this.shell);

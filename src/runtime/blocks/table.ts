@@ -4,6 +4,8 @@ import { formatCell, filterTableRows, sortTableRows, statusValues, resolveCell, 
 
 export const renderTable: BlockRenderer<"table"> = (block, context) => {
   const { state, bindings } = context;
+  const rowIds = new WeakMap(block.rows.map((row, index) => [row, row.id ?? `row_${index + 1}`]));
+  const selectVar = block.selectVar;
   const wrap = el("div", "iui-table-block");
   let query = "";
   let status = "All";
@@ -82,6 +84,25 @@ export const renderTable: BlockRenderer<"table"> = (block, context) => {
     }
     body.replaceChildren(...rows.map((row) => {
       const tr = el("tr", row.tone ? `tone ${row.tone}` : undefined);
+      if (selectVar) {
+        const rowId = rowIds.get(row)!;
+        const selected = state.scope[selectVar] === rowId;
+        tr.classList.add("selectable");
+        if (selected) tr.classList.add("selected");
+        tr.setAttribute("tabindex", "0");
+        tr.setAttribute("aria-selected", String(selected));
+        const pick = () => {
+          state.scope[selectVar] = rowId;
+          state.notifyScopeChange();
+        };
+        tr.addEventListener("click", pick);
+        tr.addEventListener("keydown", (event) => {
+          const key = (event as KeyboardEvent).key;
+          if (key !== "Enter" && key !== " ") return;
+          event.preventDefault();
+          pick();
+        });
+      }
       for (const column of block.columns) {
         const value = resolveCell(row, column, state.scope);
         const statusCell = column.key === block.filter?.key && typeof value === "string";

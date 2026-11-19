@@ -75,6 +75,10 @@
 :is(.iui-bar-fill, .iui-stacked-seg, .iui-swatch).success { background: var(--iui-success); }
 :is(.iui-bar-fill, .iui-stacked-seg, .iui-swatch).warn { background: var(--iui-warn); }
 
+.iui-bar-row.active .iui-bar-head { color: var(--iui-accent); }
+.iui-bar-row.active .iui-bar-fill { box-shadow: 0 0 0 1px var(--iui-accent); filter: brightness(1.1); }
+.iui-stacked-seg.active { outline: 2px solid var(--iui-text); outline-offset: -2px; }
+
 .iui-table-wrap, .iui-table-scroll, .iui-graph-viewport {
   max-width: 100%;
   overflow: auto;
@@ -325,6 +329,18 @@
 
 .iui-data-table tr.tone:hover td {
   background: color-mix(in srgb, var(--iui-row-tone) 7%, transparent);
+}
+
+.iui-data-table tbody tr.selectable { cursor: pointer; }
+.iui-data-table tbody tr.selectable:hover td {
+  background: color-mix(in srgb, var(--iui-accent) 6%, transparent);
+}
+.iui-data-table tbody tr.selectable.selected td {
+  background: color-mix(in srgb, var(--iui-accent) 13%, transparent);
+}
+.iui-data-table tbody tr.selectable:focus-visible {
+  outline: 2px solid var(--iui-focus);
+  outline-offset: -2px;
 }
 
 .iui-data-table .iui-table-empty {

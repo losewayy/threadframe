@@ -1,5 +1,5 @@
-import { walkBlocks, type UiBlock } from "../../schema/uiSpec.js";
-import type { VarScope } from "../formula.js";
+import { declaredSelectVars, walkBlocks, type DerivedVar, type UiBlock } from "../../schema/uiSpec.js";
+import { evaluateFormula, type VarScope } from "../formula.js";
 import { hasCjkText, uiCopy } from "../display.js";
 import { buildIntentSummary, buildSnapshot, type ControlMeta, type ThreadFrameSnapshot } from "../summary.js";
 import { copyText } from "./clipboard.js";
@@ -19,10 +19,14 @@ export class UiStateStore implements UiState {
   readonly choiceLabels = new Map<string, string>();
   readonly choicePrompts = new Map<string, string>();
   readonly checklistLabels = new Map<string, string>();
+  readonly derivedVarIds = new Set<string>();
   specTitle = "";
   hasSubmitAction = false;
   zh = false;
   private readonly containerKeys = new WeakMap<UiBlock, string>();
+  private readonly sliderBounds = new Map<string, { min: number; max: number; step: number }>();
+  private readonly stepOptions = new Map<string, string[]>();
+  private derivedVars: DerivedVar[] = [];
   private reactiveBindings: ReactiveBinding[] = [];
   private controlSyncCallbacks: ControlSyncCallback[] = [];
 
@@ -76,8 +80,9 @@ export class UiStateStore implements UiState {
         containerIndex++;
         this.containerKeys.set(block, key);
         if (block.kind === "timeline" && !this.timelineSelections.has(key)) {
-          const initial = block.steps.find((step) => step.status === "active" && step.detail)
-            ?? block.steps.find((step) => step.detail);
+          const initial = block.steps.find((step) => step.status === "active" && (step.detail || block.selectVar))
+            ?? block.steps.find((step) => step.detail)
+            ?? (block.selectVar ? block.steps[0] : undefined);
           if (initial) this.timelineSelections.set(key, initial.id);
         }
         if (block.kind === "tabs" && !this.tabSelections.has(key)) {
@@ -105,6 +110,11 @@ export class UiStateStore implements UiState {
               ...(ctrl.kind === "slider" && ctrl.unit ? { unit: ctrl.unit } : {}),
             });
           }
+          if (ctrl.kind === "slider") {
+            this.sliderBounds.set(ctrl.id, { min: ctrl.min, max: ctrl.max, step: ctrl.step ?? 1 });
+          } else if (ctrl.kind === "select") {
+            this.stepOptions.set(ctrl.id, ctrl.options);
+          }
         }
       } else if (block.kind === "checklist") {
         for (const item of block.items) {
@@ -120,9 +130,36 @@ export class UiStateStore implements UiState {
         }
       }
     });
+    for (const [id, selected] of declaredSelectVars(blocks)) {
+      this.stepOptions.set(id, selected.values);
+      if (!(id in this.scope)) this.scope[id] = selected.initial;
+      if (!this.controlMeta.has(id)) {
+        this.controlMeta.set(id, { label: selected.label, defaultValue: selected.initial });
+      }
+    }
+  }
+
+  setDerivedVars(vars: readonly DerivedVar[] | undefined): void {
+    for (const id of this.derivedVarIds) delete this.scope[id];
+    this.derivedVarIds.clear();
+    this.derivedVars = [...(vars ?? [])];
+    for (const item of this.derivedVars) this.derivedVarIds.add(item.id);
+    this.evaluateDerivedVars();
+  }
+
+  private evaluateDerivedVars(): void {
+    for (const item of this.derivedVars) {
+      const value = evaluateFormula(item.formula, this.scope);
+      if (value === null || (typeof value === "number" && !Number.isFinite(value))) {
+        delete this.scope[item.id];
+      } else {
+        this.scope[item.id] = value;
+      }
+    }
   }
 
   notifyScopeChange(): void {
+    this.evaluateDerivedVars();
     for (const sync of this.controlSyncCallbacks) {
       sync(this.scope);
     }
@@ -135,6 +172,7 @@ export class UiStateStore implements UiState {
     return buildIntentSummary({
       scope: this.scope,
       controlMeta: this.controlMeta,
+      derivedIds: this.derivedVarIds,
       selectedChoices: this.selectedChoiceIds,
       choiceLabels: this.choiceLabels,
       choicePrompts: this.choicePrompts,
@@ -148,6 +186,7 @@ export class UiStateStore implements UiState {
       title: this.specTitle,
       scope: this.scope,
       controlMeta: this.controlMeta,
+      derivedIds: this.derivedVarIds,
       selectedChoices: this.selectedChoiceIds,
       choiceLabels: this.choiceLabels,
       checklistState: this.checklistState,
@@ -155,7 +194,59 @@ export class UiStateStore implements UiState {
     });
   }
 
+  private stepVariable(action: UiActionRequest): void {
+    const id = action.var;
+    if (!id || this.derivedVarIds.has(id)) return;
+    const current = this.scope[id];
+    if (typeof current === "number") {
+      const bounds = this.sliderBounds.get(id);
+      const delta = action.delta ?? bounds?.step ?? 1;
+      const lo = action.min ?? bounds?.min;
+      const hi = action.max ?? bounds?.max;
+      let next = Number((current + delta).toFixed(6));
+      if (lo !== undefined && hi !== undefined) {
+        if (action.wrap) {
+          if (next > hi) next = lo;
+          else if (next < lo) next = hi;
+        } else {
+          next = Math.min(hi, Math.max(lo, next));
+        }
+      }
+      this.scope[id] = next;
+      this.notifyScopeChange();
+      return;
+    }
+    if (typeof current === "string") {
+      const options = this.stepOptions.get(id);
+      if (!options?.length) return;
+      const idx = Math.max(0, options.indexOf(current));
+      const delta = Math.trunc(action.delta ?? 1);
+      const raw = idx + delta;
+      const next = action.wrap
+        ? ((raw % options.length) + options.length) % options.length
+        : Math.max(0, Math.min(options.length - 1, raw));
+      this.scope[id] = options[next];
+      this.notifyScopeChange();
+      return;
+    }
+    if (typeof current === "boolean") {
+      this.scope[id] = !current;
+      this.notifyScopeChange();
+    }
+  }
+
   async dispatchAction(action: UiActionRequest): Promise<void> {
+    if (action.kind === "set_var") {
+      if (action.var && action.value !== undefined && !this.derivedVarIds.has(action.var)) {
+        this.scope[action.var] = action.value;
+        this.notifyScopeChange();
+      }
+      return;
+    }
+    if (action.kind === "step_var") {
+      this.stepVariable(action);
+      return;
+    }
     const summary = this.summarize();
     const message = action.promptTemplate
       ? action.promptTemplate.replace("{{state_summary}}", summary)

@@ -238,3 +238,9 @@
   margin-top: 4px;
   font-size: var(--iui-caption-size);
 }
+
+.iui-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

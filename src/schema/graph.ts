@@ -27,6 +27,7 @@ export const GraphBlockSchema = z.object({
   kind: z.literal("graph"),
   id: z.string().optional(),
   title: z.string().optional(),
+  selectVar: z.string().regex(/^[A-Za-z_]\w*$/).optional(),
   direction: z.enum(["LR", "TB"]).default("LR"),
   nodes: z.array(GraphNodeSchema).min(1),
   edges: z.array(GraphEdgeSchema).default([]),

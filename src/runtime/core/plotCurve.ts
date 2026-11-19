@@ -1,7 +1,7 @@
 import { el } from "./dom.js";
 import { svgCanvas, svgNode, svgText, vectorColors } from "./svg.js";
 import { evaluateNumericFormula } from "../formula.js";
-import { curveSegments, sampleCurve } from "../curve.js";
+import { curveSegments, sampleCurve, type CurvePoint } from "../curve.js";
 import { formatNumber } from "../display.js";
 import type { BlockRenderContext } from "./types.js";
 import type { UiBlock } from "../../schema/uiSpec.js";
@@ -54,6 +54,8 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
   const curveGroup = svgNode("g");
   curveGroup.setAttribute("clip-path", `url(#${clipId})`);
   canvas.appendChild(curveGroup);
+  const baselineGroup = svgNode("g");
+  curveGroup.appendChild(baselineGroup);
   const paths = curves.map((curve, index) => {
     const path = svgNode("path", `iui-plot-curve ${curve.tone ?? tones[index % tones.length]}`);
     if (curve.dashed) path.classList.add("dashed");
@@ -86,13 +88,38 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
   if (block.yLabel) canvas.appendChild(svgText(left, 12, block.yLabel, "iui-plot-axis-label y"));
   const readout = el("div", "iui-plot-readout", "Hover, focus, or use arrow keys to inspect samples.");
   readout.setAttribute("role", "status");
-  wrap.append(canvas, readout);
-
+  let baselineSeries: CurvePoint[][] | null = null;
+  let baselinePaths: SVGPathElement[] = [];
+  let upperBound = block.max ?? 0;
   let focused = -1;
   let xMin = block.xMin ?? 0;
   let xMax = block.xMax ?? 1;
   let series = curves.map((curve) => ({ curve, samples: sampleCurve(curve.formula, xMin, xMax, count, {}, variable) }));
   let markerCoords = points.map((point) => ({ point, mx: point.x ?? 0, my: point.y ?? point.value ?? 0 }));
+  if (block.baseline && curves.length) {
+    const toolbar = el("div", "iui-plot-toolbar");
+    const freezeText = context.state.zh ? "留作对照曲线" : "Freeze baseline";
+    const clearText = context.state.zh ? "清除对照" : "Clear baseline";
+    const btn = el("button", "iui-action-btn secondary", freezeText);
+    btn.type = "button";
+    btn.setAttribute("aria-pressed", "false");
+    btn.addEventListener("click", () => {
+      if (baselineSeries) {
+        baselineSeries = null;
+        btn.textContent = freezeText;
+        btn.setAttribute("aria-pressed", "false");
+      } else {
+        baselineSeries = series.map(({ samples }) => samples.map((point) => ({ ...point })));
+        btn.textContent = clearText;
+        btn.setAttribute("aria-pressed", "true");
+      }
+      drawGeometry();
+    });
+    toolbar.appendChild(btn);
+    wrap.appendChild(toolbar);
+  }
+  wrap.append(canvas, readout);
+
   const refresh = () => {
     if (focused < 0) {
       readout.textContent = markerCoords.length && !series.length
@@ -105,6 +132,49 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
       const value = samples[index]?.y;
       return `${curve.label} ${variable}=${format(samples[index]?.x ?? 0)} y=${value === null || value === undefined ? "undefined" : `${format(value)}${unit}`}`;
     }).join(" | ");
+  };
+  const drawGeometry = () => {
+    const values = [
+      ...series.flatMap(({ samples }) => samples.flatMap((point) => point.y === null ? [] : [point.y])),
+      ...(baselineSeries ?? []).flatMap((samples) => samples.flatMap((point) => point.y === null ? [] : [point.y])),
+      ...markerCoords.map((m) => m.my),
+    ];
+    let min = block.yMin ?? Math.min(0, ...values);
+    let max = block.yMax ?? Math.max(1, upperBound, ...values);
+    if (min >= max) max = min + 1;
+    const span = max - min || 1;
+    const xToPx = (x: number) => left + (x - xMin) / (xMax - xMin || 1) * (right - left);
+    const yToPx = (y: number) => bottom - (y - min) / span * (bottom - top);
+    const pathD = (samples: CurvePoint[]) => curveSegments(samples).map((segment) => segment
+      .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${xToPx(point.x)},${yToPx(point.y ?? 0)}`)
+      .join(" ")).join(" ");
+    if (!baselineSeries?.length) {
+      for (const path of baselinePaths) path.remove();
+      baselinePaths = [];
+    } else {
+      while (baselinePaths.length < baselineSeries.length) {
+        const path = svgNode("path", "iui-plot-curve dashed baseline");
+        baselineGroup.appendChild(path);
+        baselinePaths.push(path);
+      }
+      baselineSeries.forEach((samples, index) => baselinePaths[index].setAttribute("d", pathD(samples)));
+    }
+    series.forEach(({ samples }, index) => paths[index].setAttribute("d", pathD(samples)));
+    if (pointPath) {
+      pointPath.setAttribute("d", markerCoords.map((m, idx) => `${idx ? "L" : "M"}${xToPx(m.mx)},${yToPx(m.my)}`).join(" "));
+    }
+    markers.forEach((marker, idx) => {
+      const { mx, my } = markerCoords[idx];
+      const px = xToPx(mx);
+      const py = yToPx(my);
+      marker.dot.setAttribute("cx", String(px));
+      marker.dot.setAttribute("cy", String(py));
+      marker.label.setAttribute("x", String(Math.max(left + 14, Math.min(right - 14, px))));
+      marker.label.setAttribute("y", String(Math.max(top + 10, py - 8)));
+      marker.tip.textContent = `${marker.point.label}: ${variable}=${format(mx)}, y=${format(my)}${unit}`;
+    });
+    references.forEach((label, index) => { label.textContent = format(min + index / 4 * span); });
+    xTicks.forEach((label, index) => { label.textContent = format([xMin, (xMin + xMax) / 2, xMax][index]); });
   };
   const indexAt = (event: PointerEvent) => {
     const matrix = canvas.getScreenCTM();
@@ -142,38 +212,8 @@ export function renderCurvePlot(block: CurvePlotBlock, context: BlockRenderConte
       xMax = block.xMax ?? (xs.length ? Math.max(...xs) : 1);
       if (xMin >= xMax) xMax = xMin + 1;
       series = curves.map((curve) => ({ curve, samples: sampleCurve(curve.formula, xMin, xMax, count, scope, variable) }));
-      const values = [
-        ...series.flatMap(({ samples }) => samples.flatMap((point) => point.y === null ? [] : [point.y])),
-        ...markerCoords.map((m) => m.my),
-      ];
-      const upper = block.maxFormula ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? 0) : block.max ?? 0;
-      let min = block.yMin ?? Math.min(0, ...values);
-      let max = block.yMax ?? Math.max(1, upper, ...values);
-      if (min >= max) max = min + 1;
-      const span = max - min || 1;
-      const xToPx = (x: number) => left + (x - xMin) / (xMax - xMin || 1) * (right - left);
-      const yToPx = (y: number) => bottom - (y - min) / span * (bottom - top);
-      series.forEach(({ samples }, index) => {
-        const d = curveSegments(samples).map((segment) => segment
-          .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${xToPx(point.x)},${yToPx(point.y ?? 0)}`)
-          .join(" ")).join(" ");
-        paths[index].setAttribute("d", d);
-      });
-      if (pointPath) {
-        pointPath.setAttribute("d", markerCoords.map((m, idx) => `${idx ? "L" : "M"}${xToPx(m.mx)},${yToPx(m.my)}`).join(" "));
-      }
-      markers.forEach((marker, idx) => {
-        const { mx, my } = markerCoords[idx];
-        const px = xToPx(mx);
-        const py = yToPx(my);
-        marker.dot.setAttribute("cx", String(px));
-        marker.dot.setAttribute("cy", String(py));
-        marker.label.setAttribute("x", String(Math.max(left + 14, Math.min(right - 14, px))));
-        marker.label.setAttribute("y", String(Math.max(top + 10, py - 8)));
-        marker.tip.textContent = `${marker.point.label}: ${variable}=${format(mx)}, y=${format(my)}${unit}`;
-      });
-      references.forEach((label, index) => { label.textContent = format(min + index / 4 * span); });
-      xTicks.forEach((label, index) => { label.textContent = format([xMin, (xMin + xMax) / 2, xMax][index]); });
+      upperBound = block.maxFormula ? evaluateNumericFormula(block.maxFormula, scope, block.max ?? 0) : block.max ?? 0;
+      drawGeometry();
       refresh();
     },
   });

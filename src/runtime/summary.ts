@@ -9,6 +9,7 @@ export interface ControlMeta {
 export interface SummaryInput {
   scope: VarScope;
   controlMeta: ReadonlyMap<string, ControlMeta>;
+  derivedIds?: ReadonlySet<string>;
   selectedChoices: ReadonlySet<string>;
   choiceLabels: ReadonlyMap<string, string>;
   choicePrompts?: ReadonlyMap<string, string>;
@@ -43,6 +44,7 @@ export function buildIntentSummary(input: SummaryInput): string {
   const changed: string[] = [];
   const defaults: string[] = [];
   for (const [id, value] of Object.entries(input.scope)) {
+    if (input.derivedIds?.has(id)) continue;
     const meta = input.controlMeta.get(id);
     const text = `${meta?.label ?? id}: ${String(value)}${meta?.unit ? ` ${meta.unit}` : ""}`;
     if (meta && value === meta.defaultValue) defaults.push(text);
@@ -75,10 +77,12 @@ export function buildSnapshot(input: SummaryInput & { title: string; savedAt?: s
   return {
     title: input.title,
     savedAt: input.savedAt ?? new Date().toISOString(),
-    variables: Object.entries(input.scope).map(([id, value]) => {
-      const meta = input.controlMeta.get(id);
-      return { id, label: meta?.label ?? id, value, changed: !meta || value !== meta.defaultValue };
-    }),
+    variables: Object.entries(input.scope)
+      .filter(([id]) => !input.derivedIds?.has(id))
+      .map(([id, value]) => {
+        const meta = input.controlMeta.get(id);
+        return { id, label: meta?.label ?? id, value, changed: !meta || value !== meta.defaultValue };
+      }),
     choices: [...input.selectedChoices].map((id) => input.choiceLabels.get(id) ?? id),
     checklist: { done, total: input.checklistState.size, items },
   };

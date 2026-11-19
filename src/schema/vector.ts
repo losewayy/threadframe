@@ -32,6 +32,7 @@ export const PlotBlockSchema = z.object({
   yMax: z.number().optional(),
   xVariable: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).optional(),
   samples: z.number().int().min(2).max(400).optional(),
+  baseline: z.boolean().optional(),
   xLabel: z.string().optional(),
   yLabel: z.string().optional(),
   unit: z.string().optional(),

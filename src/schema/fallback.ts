@@ -1,11 +1,11 @@
-import { evaluateNumericFormula, evaluateNumericOrNull, type VarScope } from "../runtime/formula.js";
+import { evaluateFormula, evaluateNumericFormula, evaluateNumericOrNull, type VarScope } from "../runtime/formula.js";
 import { plotCenter, plotValues, svgGeometry } from "../runtime/vector.js";
 import { formatNumber, statDisplay, interpolateCode } from "../runtime/display.js";
 import { curveSummary, sampleCurve } from "../runtime/curve.js";
 import { formatCell, resolveCell } from "../runtime/table.js";
 import type { IconName } from "./atoms.js";
 import { escapeMarkdownText, inlineTextMarkdown, markdownCodeSpan } from "./inlineText.js";
-import { walkBlocks, type LayoutSummary, type UiBlock, type UiSpec } from "./uiSpec.js";
+import { declaredSelectVars, walkBlocks, type LayoutSummary, type UiBlock, type UiSpec } from "./uiSpec.js";
 
 const inline = (text: string) => escapeMarkdownText(text.replace(/\r\n?|\n/g, " "));
 const unit = (text?: string) => text ? ` ${inline(text)}` : "";
@@ -16,13 +16,23 @@ const iconGlyphs: Partial<Record<IconName, string>> = {
 
 function initialScopeForSpec(spec: Partial<UiSpec>): VarScope {
   const scope: VarScope = Object.create(null);
-  walkBlocks(spec.blocks ?? [], (block) => {
+  const blocks = spec.blocks ?? [];
+  walkBlocks(blocks, (block) => {
     if (block.kind === "controls") {
       for (const ctrl of block.controls) {
         scope[ctrl.id] = ctrl.defaultValue;
       }
     }
   });
+  for (const [id, selected] of declaredSelectVars(blocks)) {
+    if (!(id in scope)) scope[id] = selected.initial;
+  }
+  for (const item of spec.vars ?? []) {
+    const val = evaluateFormula(item.formula, scope);
+    if (val !== null && !(typeof val === "number" && !Number.isFinite(val))) {
+      scope[item.id] = val;
+    }
+  }
   return scope;
 }
 
@@ -68,7 +78,14 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
       for (const [run] of code.matchAll(/`+/g)) fenceLength = Math.max(fenceLength, run.length + 1);
       const fence = "`".repeat(fenceLength);
       lines.push(`${fence}${block.language ?? ""}`, code, fence);
+      const evaluated = block.activeLineFormula ? evaluateNumericOrNull(block.activeLineFormula, scope) : null;
+      const activeLine = evaluated !== null ? Math.trunc(evaluated) : block.activeLine;
+      if (activeLine && activeLine > 0) lines.push(`_Active line: ${activeLine}_`);
       if (block.caption) lines.push(escapeMarkdownText(block.caption));
+      break;
+    }
+    case "actions": {
+      lines.push(`- Actions: ${block.buttons.map((button) => `[${inline(button.label)}]`).join(" ")}`);
       break;
     }
     case "plot": {
@@ -274,7 +291,8 @@ function measureBlocks(blocks: UiBlock[], out: LayoutMetrics): number {
       case "controls": total += block.controls.length * 52 + (block.metrics?.length ? 56 : 0); break;
       case "stats": total += Math.ceil(block.items.length / 3) * 70; break;
       case "chart": total += block.bars.length * 36 + 32; break;
-      case "plot": total += 250; break;
+      case "plot": total += 250 + (block.baseline ? 32 : 0); break;
+      case "actions": total += 44; break;
       case "svg": total += Math.min(block.height, 360) + 28; break;
       case "graph":
         if (block.nodes.length > 6) out.clippedGraph = true;

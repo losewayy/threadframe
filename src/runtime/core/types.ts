@@ -9,13 +9,19 @@ export interface RendererHostBridge {
   onRender?: (report: RenderReport) => void;
 }
 
-export type UiActionKind = "send_message" | "copy_state" | "save_state";
+export type UiActionKind = "send_message" | "copy_state" | "save_state" | "set_var" | "step_var";
 
 export interface UiActionRequest {
   label: string;
   promptTemplate?: string;
   kind?: UiActionKind;
   statePath?: string;
+  var?: string;
+  value?: number | string | boolean;
+  delta?: number;
+  min?: number;
+  max?: number;
+  wrap?: boolean;
 }
 
 export interface RenderReport {

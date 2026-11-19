@@ -73,17 +73,17 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
       ? svgText(box.x + 12, box.y + (subtitle ? 60 : 42), "", "iui-graph-value")
       : undefined;
     if (value) group.appendChild(value);
-    group.addEventListener("click", () => selectNode(node.id));
+    group.addEventListener("click", () => selectNode(node.id, true));
     group.addEventListener("keydown", (event) => {
       const key = (event as KeyboardEvent).key;
       if (key !== "Enter" && key !== " ") return;
       event.preventDefault();
-      selectNode(node.id);
+      selectNode(node.id, true);
     });
     canvas.appendChild(group);
     return { node, group, value, valueWidth: box.width - 24 };
   });
-  const selectNode = (id: string) => {
+  const selectNode = (id: string, emit = false) => {
     state.nodeSelections.set(key, id);
     for (const view of nodeViews) {
       const selected = view.node.id === id;
@@ -95,9 +95,21 @@ export const renderGraph: BlockRenderer<"graph"> = (block, context) => {
         detail.textContent = description ? `${view.node.label}: ${description}` : "";
       }
     }
+    if (emit && block.selectVar) {
+      state.scope[block.selectVar] = id;
+      state.notifyScopeChange();
+    }
   };
-  const initial = nodeViews.find((view) => view.node.id === state.nodeSelections.get(key)) ?? nodeViews[0];
+  const initialId = (block.selectVar ? String(state.scope[block.selectVar] ?? "") : "") || state.nodeSelections.get(key);
+  const initial = nodeViews.find((view) => view.node.id === initialId) ?? nodeViews[0];
   if (initial) selectNode(initial.node.id);
+  if (block.selectVar) {
+    const varName = block.selectVar;
+    context.syncControls.push((scope) => {
+      const target = String(scope[varName] ?? "");
+      if (target && nodeViews.some((view) => view.node.id === target)) selectNode(target);
+    });
+  }
   // Draw labels last so later edge paths never strike through them.
   for (const view of edgeViews) if (view.label) canvas.appendChild(view.label);
   viewport.appendChild(canvas);

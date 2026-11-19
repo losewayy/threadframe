@@ -88,7 +88,7 @@ const layerZero = new Set([
   "src/schema/markup.ts", "src/schema/markupSyntax.ts", "src/schema/markupTags.ts",
 ]);
 const blockLeaves = new Set([
-  "choices", "controls", "chart", "compare", "checklist", "architecture",
+  "actions", "choices", "controls", "chart", "compare", "checklist", "architecture",
   "callout", "grid", "tabs", "accordion",
   "plot", "svg",
   "stats", "timeline", "code",

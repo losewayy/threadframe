@@ -26,6 +26,7 @@ export const TimelineStepSchema = z.object({
 
 export const TimelineBlockSchema = z.object({
   kind: z.literal("timeline"), id: z.string().optional(), title: z.string().optional(),
+  selectVar: z.string().regex(/^[A-Za-z_]\w*$/).optional(),
   steps: z.array(TimelineStepSchema).min(1),
 });
 
@@ -33,6 +34,8 @@ export const CodeBlockSchema = z.object({
   kind: z.literal("code"), id: z.string().optional(), title: z.string().optional(),
   language: z.string().regex(/^[a-zA-Z0-9_+-]*$/).optional(),
   code: z.string().optional(), template: z.string().optional(),
+  activeLine: z.number().int().min(1).optional(),
+  activeLineFormula: z.string().optional(),
   caption: z.string().optional(), copyLabel: z.string().optional(),
 }).refine((block) => block.code !== undefined || block.template !== undefined, "Expected code or template");
 

@@ -72,6 +72,13 @@
 .iui-plot-curve.success { stroke: var(--iui-success); }
 .iui-plot-curve.warn { stroke: var(--iui-warn); }
 .iui-plot-curve.dashed { stroke-dasharray: 5 5; }
+.iui-plot-curve.baseline { stroke: var(--iui-muted); opacity: .65; stroke-width: 1.75; }
+
+.iui-plot-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
 
 .iui-curve-plot svg:focus-visible {
   outline-offset: 2px;

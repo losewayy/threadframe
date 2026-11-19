@@ -1,7 +1,16 @@
 import { el } from "../core/dom.js";
 import type { BlockRenderer } from "../core/types.js";
 import { formatNumber } from "../display.js";
-import { evaluateNumericFormula, evaluateNumericOrNull } from "../formula.js";
+import { evaluateFormula, evaluateNumericFormula, evaluateNumericOrNull } from "../formula.js";
+
+function isBarActive(expr: string | undefined, scope: Record<string, number | string | boolean>): boolean {
+  if (!expr) return false;
+  const val = evaluateFormula(expr, scope);
+  if (val === null) return false;
+  if (typeof val === "boolean") return val;
+  if (typeof val === "number") return val !== 0 && Number.isFinite(val);
+  return val.length > 0 && val !== "false" && val !== "0";
+}
 
 export const renderChart: BlockRenderer<"chart"> = (block, context) => {
   const { bindings } = context;
@@ -49,6 +58,7 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
           : (block.max ?? Math.max(1, vals.reduce((a, b) => a + b, 0)));
 
         segs.forEach((s, idx) => {
+          s.seg.classList.toggle("active", isBarActive(s.bar.activeFormula, scope));
           const raw = rawVals[idx];
           if (raw === null) {
             s.seg.style.width = "0%";
@@ -67,6 +77,7 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
 
   const rows: Array<{
     bar: (typeof block.bars)[number];
+    row: HTMLElement;
     fill: HTMLElement;
     valEl: HTMLElement;
   }> = [];
@@ -83,7 +94,7 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
     track.appendChild(fill);
     row.appendChild(track);
     wrap.appendChild(row);
-    rows.push({ bar, fill, valEl });
+    rows.push({ bar, row, fill, valEl });
   }
 
   bindings.push({
@@ -97,6 +108,7 @@ export const renderChart: BlockRenderer<"chart"> = (block, context) => {
         : (block.max ?? Math.max(1, ...vals));
 
       rows.forEach((r, idx) => {
+        r.row.classList.toggle("active", isBarActive(r.bar.activeFormula, scope));
         const raw = rawVals[idx];
         if (raw === null) {
           r.fill.style.width = "0%";

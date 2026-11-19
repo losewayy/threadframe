@@ -21,6 +21,7 @@ export const TableBlockSchema = z.object({
   kind: z.literal("table"),
   id: z.string().optional(),
   title: z.string().optional(),
+  selectVar: z.string().regex(/^[A-Za-z_]\w*$/).optional(),
   columns: z.array(TableColumnSchema).min(1),
   rows: z.array(TableRowSchema).min(1),
   filter: z.object({
