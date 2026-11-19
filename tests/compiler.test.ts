@@ -5,6 +5,7 @@ import {
 } from "../src/compile.js";
 import { RECIPES } from "../src/examples.js";
 import { renderFallbackMarkdown } from "../src/schema/fallback.js";
+import { compileMarkup } from "../src/schema/markup.js";
 import { UiSpecSchema } from "../src/schema/uiSpec.js";
 
 const calculator = (overrides: Record<string, unknown> = {}) => CalculatorInputSchema.parse({
@@ -141,4 +142,40 @@ test("shortcut recipes stay compilable and schema-valid", () => {
     assert.ok(UiSpecSchema.safeParse(spec).success);
     assert.ok(renderFallbackMarkdown(spec).length > 0);
   }
+});
+
+test("Chinese titles localize default action labels while English stays unchanged", () => {
+  const zhDecision = compileDecision(DecisionInputSchema.parse({
+    title: "新项目配置怎么处理",
+    options: [{ label: "自动补齐", recommended: true }, { label: "先不动" }],
+  }));
+  assert.ok(zhDecision.ok);
+  assert.equal(zhDecision.spec.badge, "方案决策");
+  assert.deepEqual(zhDecision.spec.actions?.map((a) => a.label), ["应用选择", "复制选择"]);
+
+  const zhCalc = compileCalculator(CalculatorInputSchema.parse({
+    title: "显存预算",
+    inputs: [{ kind: "slider", id: "concurrency", label: "并发数", defaultValue: 2 }],
+    metrics: [{ label: "显存", formula: "concurrency * 2", unit: "GB" }],
+  }));
+  assert.ok(zhCalc.ok);
+  assert.deepEqual(zhCalc.spec.actions?.map((a) => a.label), ["应用设置", "复制设置"]);
+
+  const enCalc = compileCalculator(CalculatorInputSchema.parse(RECIPES.calculator));
+  assert.ok(enCalc.ok);
+  assert.deepEqual(enCalc.spec.actions?.map((a) => a.label), ["Apply settings", "Copy settings"]);
+});
+
+test("line plot accepts coordinate marker points alongside curves", () => {
+  const compiled = compileMarkup({
+    title: "Roofline 拐点标点",
+    markup: `<slider id="peak" label="峰值" min={100} max={400} default={250}/>
+<plot mode="line" xMin={0} xMax={250}>
+  <curve label="上限" formula={min(peak, 2 * x)}/>
+  <point label="当前拐点" xFormula="peak / 2" yFormula="peak" tone="accent"/>
+</plot>`,
+  });
+  assert.ok(compiled.ok, compiled.ok ? "" : compiled.issues.join("\n"));
+  const markdown = renderFallbackMarkdown(compiled.spec);
+  assert.match(markdown, /\*\*当前拐点\*\*:\s*x=125,\s*y=250/);
 });

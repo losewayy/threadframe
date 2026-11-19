@@ -1,8 +1,10 @@
 import { el, icon } from "../core/dom.js";
+import { uiCopy } from "../display.js";
 import type { BlockRenderer } from "../core/types.js";
 
 export const renderChoices: BlockRenderer<"choices"> = (block, context) => {
   const { state } = context;
+  const copy = uiCopy(Boolean(state.zh));
   const grid = el("div", "iui-choices");
   const buttons: Array<{ id: string; btn: HTMLButtonElement }> = [];
 
@@ -40,11 +42,11 @@ export const renderChoices: BlockRenderer<"choices"> = (block, context) => {
       if (opt.setVars) {
         Object.assign(state.scope, opt.setVars);
         state.notifyScopeChange();
-        state.setStatus(`Profile: ${opt.label}`);
+        state.setStatus(`${copy.profilePrefix}${opt.label}`);
       } else if (!state.hasSubmitAction && opt.prompt && state.prompt(opt.prompt)) {
-        state.setStatus(`Prompted: ${opt.label}`);
+        state.setStatus(`${copy.promptedPrefix}${opt.label}`);
       } else {
-        state.setStatus(`Selected: ${opt.label}`);
+        state.setStatus(`${copy.selectedPrefix}${opt.label}`);
       }
     });
 

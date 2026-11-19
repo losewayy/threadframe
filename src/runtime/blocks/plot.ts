@@ -7,7 +7,9 @@ import { plotCenter, plotValues } from "../vector.js";
 import { formatNumber } from "../display.js";
 
 export const renderPlot: BlockRenderer<"plot"> = (block, context) => {
-  if (block.curves?.length) return renderCurvePlot(block, context);
+  if (block.curves?.length || (block.mode === "line" && block.points?.some((p) => p.x !== undefined || p.xFormula !== undefined))) {
+    return renderCurvePlot(block, context);
+  }
   const points = block.points ?? [];
   const wrap = el("div", `iui-plot ${block.mode}`);
   const unit = block.unit ? ` ${block.unit}` : "";

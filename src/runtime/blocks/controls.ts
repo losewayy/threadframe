@@ -1,4 +1,5 @@
 import { el, icon } from "../core/dom.js";
+import { uiCopy } from "../display.js";
 import type { BlockRenderer } from "../core/types.js";
 import { evaluateNumericFormula } from "../formula.js";
 
@@ -93,13 +94,14 @@ export const renderControls: BlockRenderer<"controls"> = (block, context) => {
   wrap.appendChild(grid);
 
   if (block.metrics?.length) {
+    const copy = uiCopy(Boolean(state.zh));
     const strip = el("div", "iui-metrics-strip");
     for (const metric of block.metrics) {
       const pill = el("div", "iui-metric-pill");
       pill.appendChild(el("div", "iui-metric-label", metric.label));
       const numEl = el("div", "iui-metric-num", "-");
       pill.appendChild(numEl);
-      const warning = el("span", "iui-metric-warning", "Above budget");
+      const warning = el("span", "iui-metric-warning", copy.aboveBudget);
       warning.prepend(icon("warning"));
       warning.hidden = true;
       pill.appendChild(warning);
@@ -114,7 +116,7 @@ export const renderControls: BlockRenderer<"controls"> = (block, context) => {
           numEl.classList.toggle("warn", warn);
           pill.classList.toggle("warn", warn);
           warning.hidden = !warn;
-          pill.title = warn ? `Above threshold: ${metric.warnAbove}${metric.unit ? ` ${metric.unit}` : ""}` : "";
+          pill.title = warn ? `${copy.aboveThreshold}: ${metric.warnAbove}${metric.unit ? ` ${metric.unit}` : ""}` : "";
         },
       });
     }

@@ -44,7 +44,7 @@ export class ThreadFrameRenderer {
   }
 
   private renderParsed(parsed: PartialUiSpecResult, streaming: boolean): void {
-    this.state.specTitle = parsed.title;
+    this.state.setHeader(parsed.title, parsed.subtitle);
     this.state.hasSubmitAction = parsed.actions.some((action) => action.kind === "send_message" || action.kind === "save_state");
     this.state.initDefaults(parsed.blocks);
     if (!this.shell) {

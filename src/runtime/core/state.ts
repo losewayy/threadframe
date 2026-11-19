@@ -1,5 +1,6 @@
 import { walkBlocks, type UiBlock } from "../../schema/uiSpec.js";
 import type { VarScope } from "../formula.js";
+import { hasCjkText, uiCopy } from "../display.js";
 import { buildIntentSummary, buildSnapshot, type ControlMeta, type ThreadFrameSnapshot } from "../summary.js";
 import { copyText } from "./clipboard.js";
 import type {
@@ -20,6 +21,7 @@ export class UiStateStore implements UiState {
   readonly checklistLabels = new Map<string, string>();
   specTitle = "";
   hasSubmitAction = false;
+  zh = false;
   private readonly containerKeys = new WeakMap<UiBlock, string>();
   private reactiveBindings: ReactiveBinding[] = [];
   private controlSyncCallbacks: ControlSyncCallback[] = [];
@@ -43,6 +45,11 @@ export class UiStateStore implements UiState {
   activateBindings(contexts: readonly BlockRenderContext[]): void {
     this.reactiveBindings = contexts.flatMap((context) => context.bindings);
     this.controlSyncCallbacks = contexts.flatMap((context) => context.syncControls);
+  }
+
+  setHeader(title: string, subtitle?: string): void {
+    this.specTitle = title;
+    this.zh = hasCjkText(title, subtitle);
   }
 
   setStatus(message: string): void {
@@ -154,10 +161,11 @@ export class UiStateStore implements UiState {
       ? action.promptTemplate.replace("{{state_summary}}", summary)
       : `${action.label}: ${summary}`;
 
+    const copy = uiCopy(this.zh);
     if (action.kind === "save_state" && action.statePath && this.bridge.saveState) {
       try {
         await this.bridge.saveState(this.snapshot(), action.statePath);
-        this.setStatus("Saved snapshot for the next turn");
+        this.setStatus(copy.savedStatus);
         return;
       } catch (error) {
         this.setStatus(`Snapshot failed: ${(error as Error).message}`);
@@ -167,15 +175,15 @@ export class UiStateStore implements UiState {
     if (action.kind !== "copy_state" && this.bridge.sendMessage) {
       try {
         await this.bridge.sendMessage(message);
-        this.setStatus("Sent to agent chat");
+        this.setStatus(copy.sentStatus);
         return;
       } catch {
-        this.setStatus("Host rejected ui/message");
+        this.setStatus(copy.hostRejected);
         return;
       }
     }
 
     const copied = await this.copy(message);
-    this.setStatus(copied ? "Copied to clipboard" : `Copy unavailable. Select and copy: ${message}`);
+    this.setStatus(copied ? copy.copiedStatus : `${copy.copyFallback}${message}`);
   }
 }

@@ -40,6 +40,7 @@ export interface UiState {
   readonly timelineSelections: Map<string, string>;
   readonly nodeSelections: Map<string, string>;
   readonly hasSubmitAction?: boolean;
+  readonly zh?: boolean;
   containerKey(block: UiBlock): string;
   notifyScopeChange(): void;
   setStatus(message: string): void;

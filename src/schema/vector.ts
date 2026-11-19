@@ -2,6 +2,10 @@ import { z } from "zod";
 
 export const PlotPointSchema = z.strictObject({
   label: z.string(),
+  x: z.number().optional(),
+  xFormula: z.string().optional(),
+  y: z.number().optional(),
+  yFormula: z.string().optional(),
   value: z.number().optional(),
   formula: z.string().optional(),
   tone: z.enum(["primary", "accent", "success", "warn"]).optional(),

@@ -88,6 +88,22 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
             lines.push(`  | ${point.label} | ${formatNumber(point.x, block.precision)} | ${formatNumber(point.y, block.precision)}${unit(block.unit)} |`);
           }
         }
+        for (const point of block.points ?? []) {
+          const px = point.xFormula ? evaluateNumericFormula(point.xFormula, scope, point.x ?? 0) : point.x ?? 0;
+          const py = point.yFormula ? evaluateNumericFormula(point.yFormula, scope, 0)
+            : point.formula ? evaluateNumericFormula(point.formula, scope, point.y ?? point.value ?? 0) : point.y ?? point.value ?? 0;
+          lines.push(`- **${inline(point.label)}**: ${variable}=${formatNumber(px, block.precision)}, y=${formatNumber(py, block.precision)}${unit(block.unit)}`);
+        }
+        break;
+      }
+      if (block.mode === "line" && block.points?.some((point) => point.x !== undefined || point.xFormula !== undefined)) {
+        const variable = inline(block.xVariable ?? "x");
+        for (const point of block.points) {
+          const px = point.xFormula ? evaluateNumericFormula(point.xFormula, scope, point.x ?? 0) : point.x ?? 0;
+          const py = point.yFormula ? evaluateNumericFormula(point.yFormula, scope, 0)
+            : point.formula ? evaluateNumericFormula(point.formula, scope, point.y ?? point.value ?? 0) : point.y ?? point.value ?? 0;
+          lines.push(`- **${inline(point.label)}**: ${variable}=${formatNumber(px, block.precision)}, y=${formatNumber(py, block.precision)}${unit(block.unit)}`);
+        }
         break;
       }
       const values = plotValues(block.points ?? [], scope).map((value) => block.mode === "donut" ? Math.max(0, value) : value);

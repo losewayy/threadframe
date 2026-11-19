@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hasCjkText } from "./runtime/display.js";
 import { evaluateFormula, formulaIdentifiers, type VarScope } from "./runtime/formula.js";
 import type { ControlItem, LeafBlock, UiBlock, UiSpec } from "./schema/uiSpec.js";
 import { IconNameSchema } from "./schema/atoms.js";
@@ -279,6 +280,7 @@ export function compileCalculator(input: CalculatorInput): CompileResult {
   if (chartBlock) secondary.push(chartBlock);
   if (codeBlock) secondary.push(codeBlock);
   const dense = input.inputs.length + metrics.length + bars.length + (input.template ? 2 : 0) > 7;
+  const zh = hasCjkText(input.title, input.subtitle, ...input.inputs.map((item) => item.label));
   let blocks: UiBlock[];
   if (dense && secondary.length) {
     const tuneChildren = [controlsBlock, ...(statsBlock ? [statsBlock] : [])];
@@ -286,8 +288,8 @@ export function compileCalculator(input: CalculatorInput): CompileResult {
     blocks = [{
       kind: "tabs", id: "calculator-views", defaultTab: "tune",
       tabs: [
-        { id: "tune", label: "Tune", children: tuneChildren },
-        { id: "output", label: "Output", children: outputChildren.length ? outputChildren : [controlsBlock] },
+        { id: "tune", label: zh ? "调参" : "Tune", children: tuneChildren },
+        { id: "output", label: zh ? "输出" : "Output", children: outputChildren.length ? outputChildren : [controlsBlock] },
       ],
     }];
   } else {
@@ -299,13 +301,13 @@ export function compileCalculator(input: CalculatorInput): CompileResult {
     spec: {
       title: input.title,
       ...(input.subtitle ? { subtitle: input.subtitle } : {}),
-      badge: input.badge ?? "Interactive calculator",
+      badge: input.badge ?? (zh ? "交互计算器" : "Interactive calculator"),
       blocks,
       actions: shortcutActions({
         statePath: input.statePath,
-        saveLabel: "Apply & remember",
-        sendLabel: "Apply settings",
-        copyLabel: "Copy settings",
+        saveLabel: zh ? "应用并记住" : "Apply & remember",
+        sendLabel: zh ? "应用设置" : "Apply settings",
+        copyLabel: zh ? "复制设置" : "Copy settings",
         sendTemplate: "Use these configuration values: {{state_summary}}",
         copyTemplate: "Configuration: {{state_summary}}",
       }),
@@ -334,6 +336,7 @@ export function compileDecision(input: DecisionInput): CompileResult {
   });
   if (issues.length) return { ok: false, issues };
 
+  const zh = hasCjkText(input.title, input.subtitle, input.question, ...options.map((o) => o.label));
   const blocks: UiBlock[] = [];
   if (criteria.length) {
     blocks.push({
@@ -347,11 +350,11 @@ export function compileDecision(input: DecisionInput): CompileResult {
       })),
     });
   } else if (recommended.length) {
-    blocks.push({ kind: "callout", tone: "success", body: `Recommended: ${options[recommended[0]].label}` });
+    blocks.push({ kind: "callout", tone: "success", body: `${zh ? "推荐方案: " : "Recommended: "}${options[recommended[0]].label}` });
   }
   blocks.push({
     kind: "choices",
-    title: input.question ?? "Pick a direction",
+    title: input.question ?? (zh ? "请选择方案" : "Pick a direction"),
     options: options.map((option) => ({
       id: option.id, label: option.label,
       ...(option.description ? { description: option.description } : {}),
@@ -364,13 +367,13 @@ export function compileDecision(input: DecisionInput): CompileResult {
     spec: {
       title: input.title,
       ...(input.subtitle ? { subtitle: input.subtitle } : input.question ? { subtitle: input.question } : {}),
-      badge: input.badge ?? "Decision matrix",
+      badge: input.badge ?? (zh ? "方案决策" : "Decision matrix"),
       blocks,
       actions: shortcutActions({
         statePath: input.statePath,
-        saveLabel: "Record decision",
-        sendLabel: "Apply decision",
-        copyLabel: "Copy decision",
+        saveLabel: zh ? "记录选择" : "Record decision",
+        sendLabel: zh ? "应用选择" : "Apply decision",
+        copyLabel: zh ? "复制选择" : "Copy decision",
         sendTemplate: "Decision: {{state_summary}}",
         copyTemplate: "Decision: {{state_summary}}",
       }),
@@ -421,18 +424,19 @@ export function compileDiagram(input: DiagramInput): CompileResult {
     ...(input.caption ? { caption: input.caption } : {}),
   });
 
+  const zh = hasCjkText(input.title, input.subtitle, ...nodes.map((node) => node.label));
   return {
     ok: true,
     spec: {
       title: input.title,
       ...(input.subtitle ? { subtitle: input.subtitle } : {}),
-      badge: input.badge ?? "Auto-laid diagram",
+      badge: input.badge ?? (zh ? "自动布局图" : "Auto-laid diagram"),
       blocks,
       actions: shortcutActions({
         statePath: input.statePath,
-        saveLabel: "Remember diagram",
-        sendLabel: "Send to chat",
-        copyLabel: "Copy summary",
+        saveLabel: zh ? "记住架构图" : "Remember diagram",
+        sendLabel: zh ? "发送到对话" : "Send to chat",
+        copyLabel: zh ? "复制摘要" : "Copy summary",
         sendTemplate: "Continue from this diagram: {{state_summary}}",
         copyTemplate: "Diagram: {{state_summary}}",
       }),
