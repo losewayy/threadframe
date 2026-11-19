@@ -1,22 +1,58 @@
+<div align="center">
+
 # ThreadFrame
+
+**Streaming interactive cards for AI chats over a single adaptive MCP server (`ui://`, SEP-1865)**
 
 [![CI](https://github.com/losewayy/threadframe/actions/workflows/ci.yml/badge.svg)](https://github.com/losewayy/threadframe/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](package.json)
+[![MCP Apps](https://img.shields.io/badge/MCP%20Apps-SEP--1865-6e56cf.svg)](docs/agent-prompts.md)
 
-[中文说明](README.zh-CN.md)
+**English** · [简体中文](README.zh-CN.md)
 
-**ThreadFrame** is an open-source streaming UI runtime and MCP Apps server (`ui://`, SEP-1865) that renders interactive cards inside AI chats. Agents describe cards with compact tags or declarative JSON. ThreadFrame previews complete blocks as arguments arrive, calculates formulas locally, and adapts the result to each host.
+</div>
 
-![ThreadFrame interactive launch-kit demo](docs/demo.gif)
+ThreadFrame turns static LLM replies into compact, live-calculating interactive cards—sliders, toggles, decision matrices, auto-laid topology graphs, plotted curves, filterable tables, and pastel flow cards—from either 3 scenario shortcuts or concise JSX-like tags (`render_markup`). One server adapts automatically across native MCP Apps hosts, `<agent-embed>` HTML hosts, and terminal Markdown clients.
 
-![ThreadFrame embedded inline inside an AI chat](docs/in-chat-preview.png)
+---
+
+## Real Conversations, Side by Side
+
+Same prompt (`"Help me estimate if a local 7B/8B LLM fits on a 24 GB GPU..."`), zero hand-written HTML, adapted automatically to each host:
+
+<table>
+  <tr>
+    <th width="50%">Codex Desktop · Native MCP Apps (<code>ui://</code>)</th>
+    <th width="50%">Antigravity · Embedded HTML (<code>&lt;agent-embed&gt;</code>)</th>
+  </tr>
+  <tr>
+    <td><img src="docs/codex-preview.png" alt="ThreadFrame rendered natively inside Codex Desktop via MCP Apps" /></td>
+    <td><img src="docs/in-chat-preview.png" alt="ThreadFrame embedded inline inside Antigravity chat" /></td>
+  </tr>
+</table>
+
+### Live Streaming & Markup Playground
+
+![ThreadFrame streaming and markup playground demo](docs/demo.gif)
+
+---
+
+## Why ThreadFrame
+
+- **Focused 4-tool surface**: Exposes only non-overlapping entry points—`present_calculator`, `present_decision`, `present_diagram`, and `render_markup`—plus on-demand `read_threadframe_state`. Background snapshot writes (`save_threadframe_state`) are scoped with `visibility: ["app"]` so they stay hidden from the model prompt.
+- **Tiny Schema, fast prompting**: `render_markup` takes a compact tag string (`<box>`, `<slider>`, `<plot>`, `<graph>`, `<table>`) with no `$ref` recursion, inline `{formula}` expressions, and line/column diagnostics on mistakes.
+- **Progressive streaming**: Renders closed blocks while arguments stream in, showing a shimmer skeleton only for unfinished trailing blocks while preserving slider values and tab selections across updates.
+- **Built-in proactive guidance**: Sends server-level MCP `instructions` during `initialize` alongside clear `Use when / Do not call for` rules and ready-to-copy client rules in [docs/agent-prompts.md](docs/agent-prompts.md).
+- **Zero-dependency single-file UI**: All scripts and styles compile into `dist/mcp-app.html` (`~391 kB`) with no external network requests, `eval`, or `innerHTML`.
+
+---
 
 ## Quick Start
 
 Requires **Node.js 22+** and **pnpm 10.15.1**.
 
-### 1. Preview locally in the Playground
+### 1. Build & explore in the Playground (30 seconds)
 
 ```sh
 git clone https://github.com/losewayy/threadframe.git
@@ -25,7 +61,7 @@ pnpm install --frozen-lockfile
 pnpm start
 ```
 
-Open `http://127.0.0.1:3001/` to explore all 7 built-in presets, simulate token-by-token partial streaming, toggle light/dark themes, switch Wide/Compact preview widths, and test your own `render_markup` tags or JSON specs.
+Open `http://127.0.0.1:3001/` to test all 7 built-in scenarios, replay block-by-block streaming, switch dark/light themes and `760px` / `420px` widths, and live-compile `render_markup` tags or JSON specs.
 
 ### 2. Connect to Codex
 
@@ -33,7 +69,7 @@ Open `http://127.0.0.1:3001/` to explore all 7 built-in presets, simulate token-
 codex mcp add threadframe -- node /path/to/threadframe/dist/main.js --stdio
 ```
 
-### 3. Connect to Claude Desktop or any stdio MCP client
+### 3. Connect to Claude Desktop, Antigravity, or any stdio MCP client
 
 ```json
 {
@@ -46,9 +82,10 @@ codex mcp add threadframe -- node /path/to/threadframe/dist/main.js --stdio
 }
 ```
 
-> Streamable HTTP is also available at `http://127.0.0.1:3001/mcp` when running `pnpm start` or `pnpm dev` (loopback only).
+- Copy-ready proactive trigger snippets for Codex (`AGENTS.md`), Claude (`CLAUDE.md`), Cursor (`.cursor/rules`), and Antigravity (`<agent-embed>`) live in [docs/agent-prompts.md](docs/agent-prompts.md).
+- Loopback Streamable HTTP MCP is also served at `http://127.0.0.1:3001/mcp` during `pnpm start` or `pnpm dev`.
 
-### 4. Export a standalone or embeddable HTML file
+### 4. Export standalone or embeddable HTML
 
 ```sh
 node dist/main.js --export agent-launch-kit out/launch-kit.html
@@ -56,19 +93,25 @@ node dist/main.js --export docs/example.json out/custom.html --embed
 cat docs/example.json | node dist/main.js --export - out/from-stdin.html --embed
 ```
 
-All scripts and styles are bundled into one zero-dependency HTML file (`dist/mcp-app.html`).
+---
 
-## One MCP Server, Adaptive Per Client
+## Focused MCP Tools
 
-ThreadFrame inspects each client's advertised MCP capabilities during handshake (`getUiCapability` and `clientInfo`) and routes responses automatically:
+| Tool | When agents pick it | Output highlights |
+| --- | --- | --- |
+| `present_calculator` | Tunable parameters, sizing, memory, cost, or config flags | Sliders, toggles, segmented selects, live metrics/bars, copyable CLI template |
+| `present_decision` | Choosing between 2–4 concrete options with trade-offs | Winner-highlighted comparison matrix, option cards, checklist |
+| `present_diagram` | Layered call chains, pipelines, or dependency topologies | Cycle-safe auto-layout (`graph`), node groups, icon badges, reactive edge highlight |
+| `render_markup` | Custom layouts, function curves, sortable/filterable tables, tinted flow cards | JSX-like tags compiling directly to `UiSpec` with line/column diagnostics |
+| `read_threadframe_state` | Follow-up turn after a local `--stdio` MCP Apps `statePath` save | Reads confirmed JSON snapshot (disabled over HTTP) |
 
-- **MCP Apps hosts** (such as Codex or MCP Apps desktop clients): keeps standard `ui://threadframe/view.html` metadata and `structuredContent` so interactive cards mount natively in chat.
-- **Embedded HTML hosts** (such as Antigravity, or when `THREADFRAME_HOST=antigravity` is set on non-UI hosts): supports passing `embedPath` in local `--stdio` mode to write a compact, transparent `--embed` HTML artifact directly to disk without bloating model context.
-- **Terminal / text-only clients**: returns clean structured Markdown tables, bullet summaries, and interpolated code fences automatically.
+> `save_threadframe_state` is registered with `_meta.ui.visibility: ["app"]` so only UI actions invoke it over local `--stdio`.
 
-## Compose a card with `render_markup`
+---
 
-Use the shortcut tools for standard calculators, decisions, and diagrams. Use `render_markup` for a custom layout. It takes a `markup` string and optional `title`, `subtitle`, and `badge`, which can also live on a single outer `<frame>`.
+## Compose Cards with `render_markup`
+
+Use the three shortcut tools for standard calculators, decisions, and diagrams. Use `render_markup` whenever you want a custom layout:
 
 ```jsx
 <frame title="Transfer capacity">
@@ -80,64 +123,72 @@ Use the shortcut tools for standard calculators, decisions, and diagrams. Use `r
 </frame>
 ```
 
-- Quote strings. Use braces around numbers, booleans, and safe formulas. `{expression}` in text, titles, captions, and badges updates from control IDs. Inline text supports bold and backtick code. Write `&lt;` and `&#123;` for literal delimiters.
-- For data, use `<plot><curve/></plot>`, `<graph><node/><edge/></graph>`, or `<table><column/><row><cell/></row></table>`. For reusable actions, add a top-level `<button label="Copy summary" action="copy_state"/>` or set declared control values with `<choice><set var="workers" value={4}/></choice>`.
-- Use one question, 1–3 inputs, one main visual, and 1–3 results. Aim for about 450px in chat and keep longer explanation in the surrounding reply. Read `threadframe://examples/markup` for complete inputs.
+- Quote strings; put numbers, booleans, and formulas in braces (`{expression}` in `<text>`, `<title>`, `<caption>`, and `<badge>` updates live from control IDs).
+- Use `<plot><curve/></plot>` for parameterized curves (with automatic breaks on undefined values), `<graph><node/><edge/></graph>` for topologies, and `<table><column/><row><cell/></row></table>` for sortable/filterable data.
+- Target roughly `450px` in chat (`1–3` inputs, `1` main visual, `1–3` results) and keep longer explanations in the surrounding reply. Read `threadframe://examples/markup` for copyable recipes.
+
+---
 
 ## Component Catalog
 
 | Category | Kinds | Purpose |
 | --- | --- | --- |
-| Decisions & inputs | `choices`, `controls` | Decision cards (`setVars` or immediate prompts); sliders, toggles, and segmented selectors. |
-| Metrics & charts | `stats`, `chart`, `plot`, `svg` | KPI cards; breakdown bars; `line`, `bar`, and `donut` plots plus parameterized function curves with undefined-point breaks; reactive whitelisted vector canvases. |
-| Comparison & flow | `compare`, `checklist`, `timeline`, `architecture` | Comparison matrices, stateful checklists, selectable step timelines, and interactive layered diagrams. |
-| Topology & data | `graph`, `table` | Auto-laid node/edge graphs with no manual coordinates; sortable, filterable engineering tables with derived cells. |
-| Notes & config | `callout`, `code` | Semantic callouts and `{{var}}`-interpolated, copyable command/config snippets. |
-| Layout and inline content | `box`, `text`, `title`, `caption`, `badge`, `divider`, `icon` | Row or column layouts, semantic tints, live text, and built-in SVG icons. |
-| Layout containers | `grid`, `tabs`, `accordion` | Responsive grids, persistent tabs, and collapsible sections sharing live variable bindings. |
+| Decisions & inputs | `choices`, `controls` | Decision cards (`setVars` or prompt actions); sliders, toggles, segmented selectors |
+| Metrics & charts | `stats`, `chart`, `plot`, `svg` | KPI cards, breakdown bars, line/bar/donut plots, parameterized curves, whitelisted reactive SVG |
+| Comparison & flow | `compare`, `checklist`, `timeline`, `architecture` | Comparison matrices, checklists, step timelines, clickable layered architectures |
+| Topology & data | `graph`, `table` | Auto-laid node/edge graphs with no manual coordinates; sortable/filterable tables with formula cells |
+| Notes & config | `callout`, `code` | Semantic callouts and `{{var}}`-interpolated copyable command/config snippets |
+| Layout primitives | `box`, `text`, `title`, `caption`, `badge`, `divider`, `icon` | Row/column layout, semantic tints, live inline formatting, 23 built-in SVG icons |
+| Layout containers | `grid`, `tabs`, `accordion` | Responsive grids, persistent tabs, and collapsible sections sharing live bindings |
 
-A top-level `box` or a `grid` can hold ordinary blocks and one level of shallow boxes. A shallow box holds only text, headings, captions, badges, dividers, and icons. A tab or accordion section can hold ordinary blocks, shallow boxes, or a grid. Hidden panels stay mounted so controls and charts remain synchronized.
+Top-level `box` and `grid` containers accept ordinary blocks plus one nested shallow `box` (`text`, `title`, `caption`, `badge`, `divider`, `icon`). Tool JSON Schemas expand statically with zero `$ref` recursion.
 
 Built-in presets for the Playground and CLI `--export`: `gpu-vram-tuner`, `runtime-compare`, `deploy-checklist`, `mcp-architecture`, `composable-workbench`, `svg-visual-lab`, `agent-launch-kit`.
+
+---
 
 ## How It Works
 
 ```mermaid
 flowchart LR
-  Agent[Agent / MCP client] -->|Shortcut or markup| Server[ThreadFrame MCP Server]
-  Server -->|ui:// + structuredContent| Host[MCP Apps host]
-  Server -->|Markdown| Text[Text-only client]
-  Server -->|embedPath --embed| Embed[Embedded HTML artifact]
+  Agent[Agent / MCP Client] -->|Shortcut or markup| Server[ThreadFrame MCP Server]
+  Server -->|ui:// + structuredContent| Host[MCP Apps Host · Codex]
+  Server -->|embedPath --embed| Embed[Embedded HTML · Antigravity]
+  Server -->|Markdown| Text[Text-only Client]
   Host -->|partial / full args| Renderer[ThreadFrameRenderer]
   Renderer --> Registry[Block Registry]
   Registry --> Core[DOM / SVG / State Core]
   Core --> Pure[Schemas / Formula Engine / Fallback]
 ```
 
-- **Focused MCP Tool Surface**: Four non-overlapping card tools—`present_calculator`, `present_decision`, `present_diagram`, and `render_markup`—plus on-demand `read_threadframe_state`. `save_threadframe_state` uses MCP Apps `visibility: ["app"]` so only UI actions invoke it, hidden from the model prompt.
-- **Built-in Proactive Triggering**: Server-level MCP `instructions` and tool descriptions tell connecting agents when to render one compact card (~450px) and when to stay text-only. Copy-ready client snippets for Codex, Claude, Cursor, and Antigravity live in [docs/agent-prompts.md](docs/agent-prompts.md).
-- **MCP Resources**: Exposes the runtime bundle at `ui://threadframe/view.html` and examples at `threadframe://examples/markup`, `threadframe://examples/recipes`, and `threadframe://examples/svg`.
-- **Formulas & Templates**: Controls bind variables into an arithmetic/comparison/ternary recursive-descent parser (`min`, `max`, `abs`, `floor`, `ceil`, `round`, `clamp`, `if`, plus string `+` concatenation). Curve plots sample formulas over a domain and break at undefined points. Code blocks substitute `{{var}}` safely via `textContent`. See [docs/example.json](docs/example.json).
-- **Snapshot Loop (opt-in)**: When a local `--stdio` shortcut call provides an explicit `statePath`, the Apply & remember action writes a compact JSON snapshot; `read_threadframe_state` returns it on the next turn. Without `statePath`, nothing touches disk.
+ThreadFrame inspects client capabilities (`getUiCapability` and `clientInfo`) on handshake and routes every tool response through one shared pipeline:
+
+- **MCP Apps hosts** (such as Codex Desktop): receives `ui://threadframe/view.html` metadata and `structuredContent` for native inline mounting, and handles bi-directional `ui/message` actions directly back into the chat.
+- **Embedded HTML hosts** (such as Antigravity, or `THREADFRAME_HOST=antigravity`): writes a compact, transparent `--embed` HTML artifact to `embedPath` over local `--stdio`.
+- **Terminal / text-only clients**: receives clean Markdown tables, bullet summaries, and evaluated code snippets automatically.
+
+---
 
 ## Security Boundaries
 
-- **Zero `eval` / `new Function`**: All expressions run through a dedicated tokenizer and recursive-descent parser safe under strict CSP sandboxes.
-- **Native DOM & SVG Whitelist**: Elements are built with `createElement` / `createElementNS` and `textContent`. SVG only allows `rect`, `circle`, `line`, `path`, `text`, `polyline`, and `polygon` with validated coordinates and semantic theme tokens; `<script>`, `<foreignObject>`, inline event handlers, and external URLs are rejected by schema.
-- **Bounded Non-Recursive Schema**: Tool JSON Schemas expand without `$ref` recursion so strict validators accept every block kind cleanly.
-- **Scoped File Writes**: `embedPath` and snapshot `statePath` are only accepted in local `--stdio` mode (blocked over HTTP) for `.html` / `.json` paths, with device names, ADS streams, UNC paths, trailing dots, and symlink components rejected.
-- **Render Telemetry & Clipboard Fallback**: Views emit `threadframe:render` (`ready`, `partial`, `error`) and `data-iui-render-status`. Copy actions fall back cleanly from `navigator.clipboard` to a synchronous `<textarea>` copy inside sandboxed iframes.
+- **Zero `eval` / `new Function`**: Formulas execute in a dedicated recursive-descent parser (`min`, `max`, `abs`, `floor`, `ceil`, `round`, `clamp`, `if`, comparisons, ternary, string `+`), compatible with strict CSP sandboxes.
+- **Native DOM & SVG allowlist**: Built strictly with `createElement` / `createElementNS` and `textContent`. `<script>`, inline event handlers, arbitrary `<style>`, and external URLs are rejected at schema validation.
+- **Bounded non-recursive schemas**: Every MCP tool schema is finite and `$ref`-free.
+- **Scoped local file writes**: `embedPath` (`.html`) and `statePath` (`.json`) are restricted to local `--stdio` (blocked over HTTP) and guard against device names, ADS streams, UNC paths, trailing dots, and symlink escapes.
+- **Clipboard fallback**: Copy buttons fall back cleanly from `navigator.clipboard` to a synchronous `<textarea>` copy inside sandboxed frames.
+
+---
 
 ## Development
 
 ```sh
-pnpm run typecheck   # TypeScript check
+pnpm run typecheck   # TypeScript typecheck
 pnpm run build       # Compile server + single-file dist/mcp-app.html
 pnpm test            # Architecture DAG, schema, formula, fallback & MCP protocol tests
 pnpm run check       # Full build + test gate
 ```
 
-Repository rules and test standards live in [AGENTS.md](AGENTS.md). Architecture tests enforce a strict acyclic dependency graph across `src/`, keeping `src/runtime/renderer.ts` under 200 lines and each block under 220 lines.
+Repository testing standards live in [AGENTS.md](AGENTS.md). Architecture tests enforce an acyclic dependency graph across `src/`, keeping `src/runtime/renderer.ts` under 200 lines and every block under 220 lines.
 
 ## License
 
