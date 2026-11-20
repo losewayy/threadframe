@@ -133,6 +133,19 @@
 
 .iui-plot-dot, .iui-plot-bar, .iui-donut-segment { cursor: crosshair; }
 
+.iui-plot-dot.draggable { cursor: grab; touch-action: none; }
+.iui-plot-dot.draggable:active { cursor: grabbing; }
+
+.iui-plot-bar-val {
+  fill: var(--iui-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.iui-pie-track { stroke-width: 90; }
+.iui-pie-segment { stroke-width: 90; }
+.iui-pie-segment:hover, .iui-pie-segment:focus { stroke-width: 94; }
+
 .iui-plot-dot:hover, .iui-plot-dot:focus,
 .iui-plot-bar:hover, .iui-plot-bar:focus {
   outline: none;

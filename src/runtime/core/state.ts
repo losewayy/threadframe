@@ -1,10 +1,10 @@
-import { declaredSelectVars, walkBlocks, type DerivedVar, type UiBlock } from "../../schema/uiSpec.js";
+import { declaredPlotVars, declaredSelectVars, walkBlocks, type DerivedVar, type UiBlock } from "../../schema/uiSpec.js";
 import { evaluateFormula, type VarScope } from "../formula.js";
 import { hasCjkText, uiCopy } from "../display.js";
 import { buildIntentSummary, buildSnapshot, type ControlMeta, type ThreadFrameSnapshot } from "../summary.js";
 import { copyText } from "./clipboard.js";
 import type {
-  BlockRenderContext, ControlSyncCallback, ReactiveBinding, RendererHostBridge, UiActionRequest, UiState,
+  BlockRenderContext, ControlSyncCallback, ReactiveBinding, RendererHostBridge, SliderBounds, UiActionRequest, UiState,
 } from "./types.js";
 
 export class UiStateStore implements UiState {
@@ -20,12 +20,14 @@ export class UiStateStore implements UiState {
   readonly choicePrompts = new Map<string, string>();
   readonly checklistLabels = new Map<string, string>();
   readonly derivedVarIds = new Set<string>();
+  readonly playingVars = new Set<string>();
   specTitle = "";
   hasSubmitAction = false;
   zh = false;
   private readonly containerKeys = new WeakMap<UiBlock, string>();
-  private readonly sliderBounds = new Map<string, { min: number; max: number; step: number }>();
+  private readonly sliderBounds = new Map<string, SliderBounds>();
   private readonly stepOptions = new Map<string, string[]>();
+  private readonly playTimers = new Map<string, ReturnType<typeof setInterval>>();
   private derivedVars: DerivedVar[] = [];
   private reactiveBindings: ReactiveBinding[] = [];
   private controlSyncCallbacks: ControlSyncCallback[] = [];
@@ -35,6 +37,23 @@ export class UiStateStore implements UiState {
     private readonly onStatus: (message: string) => void = () => {},
     private readonly clipboard: (text: string) => Promise<boolean> = copyText,
   ) {}
+
+  getSliderBounds(id: string): SliderBounds | undefined {
+    return this.sliderBounds.get(id);
+  }
+
+  stopPlaying(id?: string): void {
+    if (id !== undefined) {
+      const timer = this.playTimers.get(id);
+      if (timer) clearInterval(timer);
+      this.playTimers.delete(id);
+      this.playingVars.delete(id);
+      return;
+    }
+    for (const timer of this.playTimers.values()) clearInterval(timer);
+    this.playTimers.clear();
+    this.playingVars.clear();
+  }
 
   createContext(renderChild: (block: UiBlock) => HTMLElement): BlockRenderContext {
     return { state: this, bindings: [], syncControls: [], renderChild };
@@ -137,6 +156,18 @@ export class UiStateStore implements UiState {
         this.controlMeta.set(id, { label: selected.label, defaultValue: selected.initial });
       }
     }
+    for (const [id, plotted] of declaredPlotVars(blocks)) {
+      if (!(id in this.scope)) this.scope[id] = plotted.initial;
+      if (!this.controlMeta.has(id)) {
+        this.controlMeta.set(id, { label: plotted.label, defaultValue: plotted.initial });
+      }
+      if (!this.sliderBounds.has(id) && plotted.min !== undefined && plotted.max !== undefined && plotted.max > plotted.min) {
+        this.sliderBounds.set(id, { min: plotted.min, max: plotted.max, step: 0 });
+      }
+    }
+    for (const id of [...this.playTimers.keys()]) {
+      if (!(id in this.scope)) this.stopPlaying(id);
+    }
   }
 
   setDerivedVars(vars: readonly DerivedVar[] | undefined): void {
@@ -194,13 +225,13 @@ export class UiStateStore implements UiState {
     });
   }
 
-  private stepVariable(action: UiActionRequest): void {
+  private stepVariable(action: UiActionRequest): boolean {
     const id = action.var;
-    if (!id || this.derivedVarIds.has(id)) return;
+    if (!id || this.derivedVarIds.has(id)) return false;
     const current = this.scope[id];
     if (typeof current === "number") {
       const bounds = this.sliderBounds.get(id);
-      const delta = action.delta ?? bounds?.step ?? 1;
+      const delta = action.delta ?? (bounds && bounds.step > 0 ? bounds.step : 1);
       const lo = action.min ?? bounds?.min;
       const hi = action.max ?? bounds?.max;
       let next = Number((current + delta).toFixed(6));
@@ -212,39 +243,70 @@ export class UiStateStore implements UiState {
           next = Math.min(hi, Math.max(lo, next));
         }
       }
+      if (next === current) return false;
       this.scope[id] = next;
       this.notifyScopeChange();
-      return;
+      return true;
     }
     if (typeof current === "string") {
       const options = this.stepOptions.get(id);
-      if (!options?.length) return;
+      if (!options?.length) return false;
       const idx = Math.max(0, options.indexOf(current));
       const delta = Math.trunc(action.delta ?? 1);
       const raw = idx + delta;
       const next = action.wrap
         ? ((raw % options.length) + options.length) % options.length
         : Math.max(0, Math.min(options.length - 1, raw));
+      if (options[next] === current) return false;
       this.scope[id] = options[next];
       this.notifyScopeChange();
-      return;
+      return true;
     }
     if (typeof current === "boolean") {
       this.scope[id] = !current;
       this.notifyScopeChange();
+      return true;
     }
+    return false;
+  }
+
+  private togglePlay(action: UiActionRequest): void {
+    const id = action.var;
+    if (!id || this.derivedVarIds.has(id)) return;
+    if (this.playTimers.has(id)) {
+      this.stopPlaying(id);
+      this.notifyScopeChange();
+      return;
+    }
+    this.playingVars.add(id);
+    const interval = Math.max(50, Math.min(5000, action.intervalMs ?? 600));
+    const timer = setInterval(() => {
+      const changed = this.stepVariable({ ...action, kind: "step_var" });
+      if (!changed) {
+        this.stopPlaying(id);
+        this.notifyScopeChange();
+      }
+    }, interval);
+    this.playTimers.set(id, timer);
+    this.notifyScopeChange();
   }
 
   async dispatchAction(action: UiActionRequest): Promise<void> {
     if (action.kind === "set_var") {
       if (action.var && action.value !== undefined && !this.derivedVarIds.has(action.var)) {
+        this.stopPlaying(action.var);
         this.scope[action.var] = action.value;
         this.notifyScopeChange();
       }
       return;
     }
     if (action.kind === "step_var") {
+      this.stopPlaying(action.var);
       this.stepVariable(action);
+      return;
+    }
+    if (action.kind === "play_var") {
+      this.togglePlay(action);
       return;
     }
     const summary = this.summarize();

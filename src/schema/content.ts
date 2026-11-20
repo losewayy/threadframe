@@ -39,4 +39,26 @@ export const CodeBlockSchema = z.object({
   caption: z.string().optional(), copyLabel: z.string().optional(),
 }).refine((block) => block.code !== undefined || block.template !== undefined, "Expected code or template");
 
+export const BitFieldSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  bits: z.number().int().min(1).max(128),
+  value: z.union([z.string(), z.number()]).optional(),
+  formula: z.string().optional(),
+  tone: z.enum(["primary", "accent", "success", "warn"]).optional(),
+  detail: z.string().optional(),
+});
+
+export const BitsBlockSchema = z.object({
+  kind: z.literal("bits"),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  selectVar: z.string().regex(/^[A-Za-z_]\w*$/).optional(),
+  lsbFirst: z.boolean().optional(),
+  fields: z.array(BitFieldSchema).min(1),
+  caption: z.string().optional(),
+});
+
 export type StatItem = z.infer<typeof StatItemSchema>;
+export type BitField = z.infer<typeof BitFieldSchema>;
+export type BitsBlock = z.infer<typeof BitsBlockSchema>;

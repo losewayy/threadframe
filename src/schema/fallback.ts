@@ -5,7 +5,7 @@ import { curveSummary, sampleCurve } from "../runtime/curve.js";
 import { formatCell, resolveCell } from "../runtime/table.js";
 import type { IconName } from "./atoms.js";
 import { escapeMarkdownText, inlineTextMarkdown, markdownCodeSpan } from "./inlineText.js";
-import { declaredSelectVars, walkBlocks, type LayoutSummary, type UiBlock, type UiSpec } from "./uiSpec.js";
+import { declaredPlotVars, declaredSelectVars, walkBlocks, type LayoutSummary, type UiBlock, type UiSpec } from "./uiSpec.js";
 
 const inline = (text: string) => escapeMarkdownText(text.replace(/\r\n?|\n/g, " "));
 const unit = (text?: string) => text ? ` ${inline(text)}` : "";
@@ -26,6 +26,9 @@ function initialScopeForSpec(spec: Partial<UiSpec>): VarScope {
   });
   for (const [id, selected] of declaredSelectVars(blocks)) {
     if (!(id in scope)) scope[id] = selected.initial;
+  }
+  for (const [id, plotted] of declaredPlotVars(blocks)) {
+    if (!(id in scope)) scope[id] = plotted.initial;
   }
   for (const item of spec.vars ?? []) {
     const val = evaluateFormula(item.formula, scope);
@@ -88,7 +91,30 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
       lines.push(`- Actions: ${block.buttons.map((button) => `[${inline(button.label)}]`).join(" ")}`);
       break;
     }
+    case "bits": {
+      const total = block.fields.reduce((sum, field) => sum + field.bits, 0);
+      let cursor = block.lsbFirst ? 0 : total - 1;
+      for (const field of block.fields) {
+        const start = cursor;
+        const end = block.lsbFirst ? cursor + field.bits - 1 : cursor - field.bits + 1;
+        cursor = block.lsbFirst ? end + 1 : end - 1;
+        const range = field.bits === 1 ? `${start}` : `${start}:${end}`;
+        const raw = field.formula ? evaluateFormula(field.formula, scope) : field.value;
+        const val = raw === null || raw === undefined ? "" : ` = ${typeof raw === "number" ? formatNumber(raw) : inline(String(raw))}`;
+        lines.push(`- [${range}] **${inline(field.label)}** (${field.bits}b)${val}${field.detail ? `: ${inline(field.detail)}` : ""}`);
+      }
+      if (block.caption) lines.push(escapeMarkdownText(block.caption));
+      break;
+    }
     case "plot": {
+      const formatPoint = (point: NonNullable<typeof block.points>[number], variable: string) => {
+        const px = point.xFormula ? evaluateNumericFormula(point.xFormula, scope, point.x ?? 0)
+          : point.xVar ? Number(scope[point.xVar] ?? point.x ?? 0) : point.x ?? 0;
+        const py = point.yFormula ? evaluateNumericFormula(point.yFormula, scope, 0)
+          : point.formula ? evaluateNumericFormula(point.formula, scope, point.y ?? point.value ?? 0)
+          : point.yVar ? Number(scope[point.yVar] ?? point.y ?? point.value ?? 0) : point.y ?? point.value ?? 0;
+        return `- **${inline(point.label)}**: ${variable}=${formatNumber(px, block.precision)}, y=${formatNumber(py, block.precision)}${unit(block.unit)}`;
+      };
       if (block.curves?.length) {
         const variable = inline(block.xVariable ?? "x");
         for (const curve of block.curves) {
@@ -105,28 +131,23 @@ function formatBlockMarkdown(block: UiBlock, scope: VarScope): string[] {
             lines.push(`  | ${point.label} | ${formatNumber(point.x, block.precision)} | ${formatNumber(point.y, block.precision)}${unit(block.unit)} |`);
           }
         }
-        for (const point of block.points ?? []) {
-          const px = point.xFormula ? evaluateNumericFormula(point.xFormula, scope, point.x ?? 0) : point.x ?? 0;
-          const py = point.yFormula ? evaluateNumericFormula(point.yFormula, scope, 0)
-            : point.formula ? evaluateNumericFormula(point.formula, scope, point.y ?? point.value ?? 0) : point.y ?? point.value ?? 0;
-          lines.push(`- **${inline(point.label)}**: ${variable}=${formatNumber(px, block.precision)}, y=${formatNumber(py, block.precision)}${unit(block.unit)}`);
-        }
+        for (const point of block.points ?? []) lines.push(formatPoint(point, variable));
         break;
       }
-      if (block.mode === "line" && block.points?.some((point) => point.x !== undefined || point.xFormula !== undefined)) {
+      if (block.mode === "scatter"
+        || (block.mode === "line" && block.points?.some((point) => point.x !== undefined || point.xFormula !== undefined || point.xVar !== undefined))) {
         const variable = inline(block.xVariable ?? "x");
-        for (const point of block.points) {
-          const px = point.xFormula ? evaluateNumericFormula(point.xFormula, scope, point.x ?? 0) : point.x ?? 0;
-          const py = point.yFormula ? evaluateNumericFormula(point.yFormula, scope, 0)
-            : point.formula ? evaluateNumericFormula(point.formula, scope, point.y ?? point.value ?? 0) : point.y ?? point.value ?? 0;
-          lines.push(`- **${inline(point.label)}**: ${variable}=${formatNumber(px, block.precision)}, y=${formatNumber(py, block.precision)}${unit(block.unit)}`);
-        }
+        for (const point of block.points ?? []) lines.push(formatPoint(point, variable));
         break;
       }
-      const values = plotValues(block.points ?? [], scope).map((value) => block.mode === "donut" ? Math.max(0, value) : value);
-      block.points?.forEach((point, index) => lines.push(`- ${inline(point.label)}: ${formatNumber(values[index], block.precision)}${unit(block.unit)}`));
+      const circular = block.mode === "donut" || block.mode === "pie";
+      const values = plotValues(block.points ?? [], scope).map((value) => circular ? Math.max(0, value) : value);
+      const total = values.reduce((sum, value) => sum + value, 0);
+      block.points?.forEach((point, index) => {
+        const pct = block.mode === "pie" && total > 0 ? ` (${(values[index] / total * 100).toFixed(1)}%)` : "";
+        lines.push(`- ${inline(point.label)}: ${formatNumber(values[index], block.precision)}${unit(block.unit)}${pct}`);
+      });
       if (block.mode === "donut") {
-        const total = values.reduce((sum, value) => sum + value, 0);
         const center = formatNumber(plotCenter(block, scope, total), block.precision);
         lines.push(`- ${inline(block.centerLabel ?? "Total")}: ${center}${unit(block.unit)}`);
       }
@@ -293,6 +314,7 @@ function measureBlocks(blocks: UiBlock[], out: LayoutMetrics): number {
       case "chart": total += block.bars.length * 36 + 32; break;
       case "plot": total += 250 + (block.baseline ? 32 : 0); break;
       case "actions": total += 44; break;
+      case "bits": total += 108; break;
       case "svg": total += Math.min(block.height, 360) + 28; break;
       case "graph":
         if (block.nodes.length > 6) out.clippedGraph = true;

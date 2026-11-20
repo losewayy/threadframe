@@ -9,7 +9,7 @@ export interface RendererHostBridge {
   onRender?: (report: RenderReport) => void;
 }
 
-export type UiActionKind = "send_message" | "copy_state" | "save_state" | "set_var" | "step_var";
+export type UiActionKind = "send_message" | "copy_state" | "save_state" | "set_var" | "step_var" | "play_var";
 
 export interface UiActionRequest {
   label: string;
@@ -22,6 +22,14 @@ export interface UiActionRequest {
   min?: number;
   max?: number;
   wrap?: boolean;
+  intervalMs?: number;
+  pauseLabel?: string;
+}
+
+export interface SliderBounds {
+  min: number;
+  max: number;
+  step: number;
 }
 
 export interface RenderReport {
@@ -45,8 +53,10 @@ export interface UiState {
   readonly accordionOpen: Map<string, boolean>;
   readonly timelineSelections: Map<string, string>;
   readonly nodeSelections: Map<string, string>;
+  readonly playingVars?: ReadonlySet<string>;
   readonly hasSubmitAction?: boolean;
   readonly zh?: boolean;
+  getSliderBounds?(id: string): SliderBounds | undefined;
   containerKey(block: UiBlock): string;
   notifyScopeChange(): void;
   setStatus(message: string): void;

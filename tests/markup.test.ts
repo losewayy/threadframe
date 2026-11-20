@@ -60,11 +60,14 @@ test("markup supports declared presets, graph icons, and derived table columns",
   assert.equal(compiled.spec.actions?.[0].kind, "copy_state");
   assert.match(renderFallbackMarkdown(compiled.spec), /\b6\b/);
 
-  for (const input of [MARKUP_RECIPES.flow, MARKUP_RECIPES.curve, MARKUP_RECIPES.diagram, MARKUP_RECIPES.table, MARKUP_RECIPES.stepper]) {
+  for (const input of [MARKUP_RECIPES.flow, MARKUP_RECIPES.curve, MARKUP_RECIPES.diagram, MARKUP_RECIPES.table, MARKUP_RECIPES.stepper, MARKUP_RECIPES.ieee754]) {
     const result = compileMarkup(input);
     assert.ok(result.ok, result.ok ? "" : result.issues.join("\n"));
     assert.ok(UiSpecSchema.safeParse(result.spec).success);
   }
+  const ieee = compileMarkup(MARKUP_RECIPES.ieee754);
+  assert.ok(ieee.ok);
+  assert.match(renderFallbackMarkdown(ieee.spec), /\[31\] \*\*Sign\*\* \(1b\)/);
   const stepper = compileMarkup(MARKUP_RECIPES.stepper);
   assert.ok(stepper.ok);
   const stepperMd = renderFallbackMarkdown(stepper.spec);
@@ -194,6 +197,7 @@ test("markup derives omitted structural ids, accepts natural aliases, and compil
       case "curve":
       case "point": return `<plot mode="line" xVariable="x" xMin={0} xMax={10}>${example}</plot>`;
       case "node": return `<graph>${example}</graph>`;
+      case "field": return `<bits>${example}</bits>`;
       case "edge": return `<graph><node id="a" label="A"/><node id="b" label="B"/>${example}</graph>`;
       case "column": return `<table>${example}<row><cell key="name" value="A"/></row></table>`;
       case "row": return `<table><column key="name" label="Name"/>${example}</table>`;
@@ -282,4 +286,38 @@ handle()</code>
     assert.equal(failed.ok, false, markup);
     assert.match(failed.issues.join("\n"), pattern);
   }
+});
+
+test("markup supports draggable plot points, pie/scatter plots, bits layout, and play_var", () => {
+  const interactive = compileMarkup({
+    markup: `
+      <slider id="vx" label="Vector X" min={-5} max={5} step={0.5} default={3}/>
+      <slider id="vy" label="Vector Y" min={-5} max={5} step={0.5} default={4}/>
+      <plot mode="scatter" xMin={-5} xMax={5} yMin={-5} yMax={5}>
+        <point label="Tip" xVar="vx" yVar="vy"/>
+      </plot>
+      <plot mode="pie">
+        <point label="Weights" value={60} tone="primary"/>
+        <point label="KV" value={40} tone="accent"/>
+      </plot>
+      <bits selectVar="field">
+        <field id="s" label="Sign" bits={1} value="0"/>
+        <field id="e" label="Exp" bits={8} formula={vx + 127}/>
+      </bits>
+      <actions>
+        <button action="play_var" label="Play" pauseLabel="Pause" var="vx" intervalMs={100}/>
+      </actions>
+    `,
+  });
+  assert.ok(interactive.ok, interactive.ok ? "" : interactive.issues.join("\n"));
+  const md = renderFallbackMarkdown(interactive.spec);
+  assert.match(md, /Weights: 60 \(60\.0%\)/);
+  assert.match(md, /\[8\] \*\*Sign\*\* \(1b\) = 0/);
+  assert.match(md, /\[7:0\] \*\*Exp\*\* \(8b\) = 130/);
+
+  const collision = compileMarkup({
+    markup: '<var id="px" formula={1}/><plot mode="scatter" xMin={0} xMax={5}><point label="P" xVar="px" y={2}/></plot>',
+  });
+  assert.equal(collision.ok, false);
+  assert.match(collision.issues.join("\n"), /duplicate variable id "px"/);
 });

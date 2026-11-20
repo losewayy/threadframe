@@ -11,7 +11,8 @@ import {
 } from "./markupTags.js";
 import {
   InnerBoxBlockSchema, UiSpecSchema, actionAssignmentIssues, choiceAssignmentIssues, declaredControls,
-  declaredSelectVars, walkBlocks, type ControlItem, type DerivedVar, type PartialUiSpecResult, type UiBlock, type UiSpec,
+  declaredPlotVars, declaredSelectVars, walkBlocks, type ControlItem, type DerivedVar, type PartialUiSpecResult,
+  type UiBlock, type UiSpec,
 } from "./uiSpec.js";
 
 const MAX_MARKUP = 32_768;
@@ -100,6 +101,8 @@ function toUiAction(fields: Fields): Action {
     ...(fields.min !== undefined ? { min: fields.min as number } : {}),
     ...(fields.max !== undefined ? { max: fields.max as number } : {}),
     ...(fields.wrap !== undefined ? { wrap: fields.wrap as boolean } : {}),
+    ...(fields.intervalMs !== undefined ? { intervalMs: fields.intervalMs as number } : {}),
+    ...(fields.pauseLabel !== undefined ? { pauseLabel: fields.pauseLabel as string } : {}),
   };
 }
 
@@ -470,6 +473,13 @@ class MarkupCompiler {
         continue;
       }
       scope[id] = selected.initial;
+    }
+    for (const [id, plotted] of declaredPlotVars(spec.blocks)) {
+      if (this.varOffsets.has(id) || this.selectVarOffsets.has(id)) {
+        this.record(0, `duplicate variable id "${id}"; point xVar/yVar must not collide with <var> or selectVar`);
+        continue;
+      }
+      if (!(id in scope)) scope[id] = plotted.initial;
     }
     for (const item of this.varFormulas) {
       if (controls.has(item.id)) {

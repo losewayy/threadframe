@@ -3,8 +3,10 @@ import {
   CurveSeriesSchema, PlotBlockSchema, PlotPointSchema, SvgBlockSchema, SvgElementSchema,
 } from "./vector.js";
 export { PlotBlockSchema, SvgBlockSchema } from "./vector.js";
-import { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema, StatItemSchema, TimelineStepSchema } from "./content.js";
-export { StatsBlockSchema, TimelineBlockSchema, CodeBlockSchema } from "./content.js";
+import {
+  BitFieldSchema, BitsBlockSchema, CodeBlockSchema, StatItemSchema, StatsBlockSchema, TimelineBlockSchema, TimelineStepSchema,
+} from "./content.js";
+export { BitsBlockSchema, CodeBlockSchema, StatsBlockSchema, TimelineBlockSchema } from "./content.js";
 import { GraphBlockSchema, GraphEdgeSchema, GraphNodeSchema } from "./graph.js";
 export { GraphBlockSchema } from "./graph.js";
 import { TableBlockSchema, TableColumnSchema, TableRowSchema } from "./table.js";
@@ -168,7 +170,7 @@ export const CalloutBlockSchema = z.object({
 
 export const UiActionSchema = z.object({
   label: z.string(),
-  kind: z.enum(["send_message", "copy_state", "save_state", "set_var", "step_var"]).optional(),
+  kind: z.enum(["send_message", "copy_state", "save_state", "set_var", "step_var", "play_var"]).optional(),
   promptTemplate: z.string().optional(),
   statePath: z.string().optional(),
   var: z.string().optional(),
@@ -177,6 +179,8 @@ export const UiActionSchema = z.object({
   min: z.number().optional(),
   max: z.number().optional(),
   wrap: z.boolean().optional(),
+  intervalMs: z.number().int().min(50).max(5000).optional(),
+  pauseLabel: z.string().optional(),
 });
 
 export const ActionsBlockSchema = z.object({
@@ -195,6 +199,7 @@ export const LeafBlockSchema = z.discriminatedUnion("kind", [
   ArchitectureBlockSchema,
   CalloutBlockSchema,
   ActionsBlockSchema,
+  BitsBlockSchema,
   PlotBlockSchema,
   SvgBlockSchema,
   StatsBlockSchema,
@@ -317,7 +322,15 @@ export function declaredControls(blocks: readonly UiBlock[]): Map<string, Contro
   return declared;
 }
 
-/** Collects interactive `selectVar` bindings from graphs, architectures, timelines, and tables. */
+export interface DeclaredPlotVar {
+  id: string;
+  label: string;
+  initial: number;
+  min?: number;
+  max?: number;
+}
+
+/** Collects interactive `selectVar` bindings from graphs, architectures, timelines, tables, and bit-fields. */
 export function declaredSelectVars(blocks: readonly UiBlock[]): Map<string, DeclaredSelectVar> {
   const declared = new Map<string, DeclaredSelectVar>();
   walkBlocks(blocks, (block) => {
@@ -334,6 +347,32 @@ export function declaredSelectVars(blocks: readonly UiBlock[]): Map<string, Decl
     } else if (block.kind === "table" && block.selectVar) {
       const values = block.rows.map((row, index) => row.id ?? `row_${index + 1}`);
       if (values.length) declared.set(block.selectVar, { id: block.selectVar, label: block.title ?? block.selectVar, initial: values[0], values });
+    } else if (block.kind === "bits" && block.selectVar) {
+      const values = block.fields.map((field) => field.id);
+      if (values.length) declared.set(block.selectVar, { id: block.selectVar, label: block.title ?? block.selectVar, initial: values[0], values });
+    }
+  });
+  return declared;
+}
+
+/** Collects `xVar` / `yVar` draggable point bindings from plots. */
+export function declaredPlotVars(blocks: readonly UiBlock[]): Map<string, DeclaredPlotVar> {
+  const declared = new Map<string, DeclaredPlotVar>();
+  walkBlocks(blocks, (block) => {
+    if (block.kind !== "plot" || !block.points?.length) return;
+    for (const point of block.points) {
+      if (point.xVar && !declared.has(point.xVar)) {
+        const min = block.xMin;
+        const max = block.xMax;
+        const fallback = min !== undefined && max !== undefined ? (min + max) / 2 : 0;
+        declared.set(point.xVar, { id: point.xVar, label: `${point.label} X`, initial: point.x ?? fallback, min, max });
+      }
+      if (point.yVar && !declared.has(point.yVar)) {
+        const min = block.yMin;
+        const max = block.yMax;
+        const fallback = min !== undefined && max !== undefined ? (min + max) / 2 : 0;
+        declared.set(point.yVar, { id: point.yVar, label: `${point.label} Y`, initial: point.y ?? point.value ?? fallback, min, max });
+      }
     }
   });
   return declared;
@@ -345,6 +384,7 @@ function variableValueIssue(
   value: unknown,
   controls: ReadonlyMap<string, ControlItem>,
   selectVars: ReadonlyMap<string, DeclaredSelectVar>,
+  plotVars: ReadonlyMap<string, DeclaredPlotVar>,
 ): string | undefined {
   const control = controls.get(id);
   if (control) {
@@ -365,6 +405,13 @@ function variableValueIssue(
     }
     return undefined;
   }
+  const plotted = plotVars.get(id);
+  if (plotted) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return `${path}: expected a number`;
+    if (plotted.min !== undefined && value < plotted.min) return `${path}: expected >= ${plotted.min}`;
+    if (plotted.max !== undefined && value > plotted.max) return `${path}: expected <= ${plotted.max}`;
+    return undefined;
+  }
   return `${path}: no controls block declares this variable (or selectVar)`;
 }
 
@@ -375,12 +422,13 @@ function variableValueIssue(
 export function choiceAssignmentIssues(blocks: readonly UiBlock[]): string[] {
   const declared = declaredControls(blocks);
   const selectVars = declaredSelectVars(blocks);
+  const plotVars = declaredPlotVars(blocks);
   const issues: string[] = [];
   walkBlocks(blocks, (block) => {
     if (block.kind !== "choices") return;
     for (const option of block.options) {
       for (const [id, value] of Object.entries(option.setVars ?? {})) {
-        const issue = variableValueIssue(`choices "${option.id}" setVars.${id}`, id, value, declared, selectVars);
+        const issue = variableValueIssue(`choices "${option.id}" setVars.${id}`, id, value, declared, selectVars, plotVars);
         if (issue) issues.push(issue);
       }
     }
@@ -388,7 +436,7 @@ export function choiceAssignmentIssues(blocks: readonly UiBlock[]): string[] {
   return issues;
 }
 
-/** Checks `set_var` and `step_var` actions against editable controls and `selectVar` bindings. */
+/** Checks `set_var`, `step_var`, and `play_var` actions against editable controls, `selectVar`, and plot point bindings. */
 export function actionAssignmentIssues(
   blocks: readonly UiBlock[],
   actions: readonly UiAction[] = [],
@@ -396,6 +444,7 @@ export function actionAssignmentIssues(
 ): string[] {
   const controls = declaredControls(blocks);
   const selectVars = declaredSelectVars(blocks);
+  const plotVars = declaredPlotVars(blocks);
   const derivedIds = new Set(derivedVars.map((item) => item.id));
   const collected: UiAction[] = [...actions];
   walkBlocks(blocks, (block) => {
@@ -403,7 +452,7 @@ export function actionAssignmentIssues(
   });
   const issues: string[] = [];
   for (const action of collected) {
-    if (action.kind !== "set_var" && action.kind !== "step_var") continue;
+    if (action.kind !== "set_var" && action.kind !== "step_var" && action.kind !== "play_var") continue;
     const where = `button "${action.label}"`;
     if (!action.var) {
       issues.push(`${where}: var is required for ${action.kind}`);
@@ -418,10 +467,10 @@ export function actionAssignmentIssues(
         issues.push(`${where}: value is required for set_var`);
         continue;
       }
-      const issue = variableValueIssue(`${where} (${action.var})`, action.var, action.value, controls, selectVars);
+      const issue = variableValueIssue(`${where} (${action.var})`, action.var, action.value, controls, selectVars, plotVars);
       if (issue) issues.push(issue);
-    } else if (!controls.has(action.var) && !selectVars.has(action.var)) {
-      issues.push(`${where}: unknown variable "${action.var}"; declare it with a control or selectVar`);
+    } else if (!controls.has(action.var) && !selectVars.has(action.var) && !plotVars.has(action.var)) {
+      issues.push(`${where}: unknown variable "${action.var}"; declare it with a control, selectVar, or point xVar/yVar`);
     }
   }
   return issues;
@@ -443,6 +492,8 @@ function partialBlockChildren(raw: unknown, depth = 0): { value: unknown; pendin
   const block = raw as Record<string, unknown>;
   const lists: Record<string, Array<[string, z.ZodType]>> = {
     plot: [["points", PlotPointSchema], ["curves", CurveSeriesSchema]],
+    bits: [["fields", BitFieldSchema]],
+    actions: [["buttons", UiActionSchema]],
     svg: [["elements", SvgElementSchema]],
     stats: [["items", StatItemSchema]],
     timeline: [["steps", TimelineStepSchema]],

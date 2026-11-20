@@ -5,10 +5,12 @@ import path from "node:path";
 import test from "node:test";
 import { UiStateStore } from "../src/runtime/core/state.js";
 import { renderActions } from "../src/runtime/blocks/actions.js";
+import { renderBits } from "../src/runtime/blocks/bits.js";
 import { renderChart } from "../src/runtime/blocks/chart.js";
 import { renderChoices } from "../src/runtime/blocks/choices.js";
 import { renderCode } from "../src/runtime/blocks/code.js";
 import { renderGraph } from "../src/runtime/blocks/graph.js";
+import { renderPlot } from "../src/runtime/blocks/plot.js";
 import { renderTable } from "../src/runtime/blocks/table.js";
 import { renderTimeline } from "../src/runtime/blocks/timeline.js";
 import { renderCurvePlot } from "../src/runtime/core/plotCurve.js";
@@ -402,5 +404,152 @@ test("derived vars, selectVar, code active lines, step_var/set_var, and baseline
   } finally {
     (globalThis as { document?: unknown }).document = previousDocument;
     (globalThis as { HTMLButtonElement?: unknown }).HTMLButtonElement = previousButton;
+  }
+});
+
+test("draggable plot points, play_var animation, bits fields, and pie/bar plots update state and DOM", async () => {
+  const previousDocument = (globalThis as { document?: unknown }).document;
+  const previousDomPoint = (globalThis as { DOMPoint?: unknown }).DOMPoint;
+  type MockEl = {
+    tagName: string;
+    className: string;
+    textContent: string;
+    hidden: boolean;
+    children: MockEl[];
+    attributes: Map<string, string>;
+    style: Record<string, string> & { setProperty: (k: string, v: string) => void };
+    classList: { add: (n: string) => void; toggle: (n: string, f?: boolean) => void; contains: (n: string) => boolean };
+    setAttribute: (k: string, v: string) => void;
+    getAttribute: (k: string) => string | null;
+    append: (...nodes: MockEl[]) => void;
+    appendChild: (child: MockEl) => MockEl;
+    addEventListener: (event: string, fn: (event?: unknown) => void) => void;
+    dispatch: (event: string, payload?: unknown) => void;
+    click: () => void;
+    getScreenCTM: () => { inverse: () => unknown };
+  };
+  const makeEl = (tag = "div"): MockEl => {
+    const listeners = new Map<string, Array<(event?: unknown) => void>>();
+    const classes = new Set<string>();
+    const sync = (node: MockEl) => {
+      for (const name of node.className.split(/\s+/).filter(Boolean)) classes.add(name);
+    };
+    const node: MockEl = {
+      tagName: tag,
+      className: "",
+      textContent: "",
+      hidden: false,
+      children: [],
+      attributes: new Map<string, string>(),
+      style: Object.assign(Object.create(null), { setProperty: (k: string, v: string) => { node.style[k] = v; } }),
+      classList: {
+        add: (name: string) => { sync(node); classes.add(name); },
+        toggle: (name: string, f?: boolean) => {
+          sync(node);
+          if (f === undefined ? !classes.has(name) : f) classes.add(name);
+          else classes.delete(name);
+        },
+        contains: (name: string) => { sync(node); return classes.has(name); },
+      },
+      setAttribute: (k: string, v: string) => {
+        node.attributes.set(k, v);
+        if (k === "class") node.className = v;
+      },
+      getAttribute: (k: string) => node.attributes.get(k) ?? null,
+      append: (...nodes: MockEl[]) => { node.children.push(...nodes); },
+      appendChild: (child: MockEl) => { node.children.push(child); return child; },
+      addEventListener: (event: string, fn: (event?: unknown) => void) => {
+        listeners.set(event, [...(listeners.get(event) ?? []), fn]);
+      },
+      dispatch: (event: string, payload = {}) => { for (const fn of listeners.get(event) ?? []) fn(payload); },
+      click: () => { for (const fn of listeners.get("click") ?? []) fn({}); },
+      getScreenCTM: () => ({ inverse: () => ({}) }),
+    };
+    return node;
+  };
+  const walk = (root: MockEl, pred: (n: MockEl) => boolean, out: MockEl[] = []): MockEl[] => {
+    if (pred(root)) out.push(root);
+    for (const child of root.children) if (child && Array.isArray(child.children)) walk(child, pred, out);
+    return out;
+  };
+  (globalThis as { document?: unknown }).document = {
+    createElement: (tag: string) => makeEl(tag),
+    createElementNS: (_ns: string, tag: string) => makeEl(tag),
+    createTextNode: (text: string) => Object.assign(makeEl("#text"), { textContent: text }),
+  };
+  (globalThis as { DOMPoint?: unknown }).DOMPoint = class {
+    constructor(public x: number, public y: number) {}
+    matrixTransform(): { x: number; y: number } { return { x: this.x, y: this.y }; }
+  };
+
+  const state = new UiStateStore();
+  try {
+    const specData = UiSpecSchema.parse({
+      title: "Visual Batch 3",
+      blocks: [
+        { kind: "controls", controls: [
+          { kind: "slider", id: "px", label: "X", min: 0, max: 10, step: 1, defaultValue: 2 },
+          { kind: "slider", id: "py", label: "Y", min: 0, max: 10, step: 1, defaultValue: 4 },
+          { kind: "slider", id: "step", label: "Step", min: 1, max: 3, step: 1, defaultValue: 1 },
+        ] },
+        { kind: "plot", mode: "scatter", xMin: 0, xMax: 10, yMin: 0, yMax: 10, points: [{ label: "Tip", xVar: "px", yVar: "py" }] },
+        { kind: "plot", mode: "pie", points: [{ label: "A", value: 3 }, { label: "B", value: 1 }] },
+        { kind: "plot", mode: "bar", points: [{ label: "One", value: 5 }, { label: "Two", value: 9 }] },
+        { kind: "bits", selectVar: "part", fields: [
+          { id: "sign", label: "Sign", bits: 1, value: 0 },
+          { id: "exp", label: "Exp", bits: 8, formula: "px + 127" },
+        ] },
+        { kind: "actions", buttons: [
+          { kind: "play_var", label: "Play", pauseLabel: "Pause", var: "step", intervalMs: 50, wrap: false },
+        ] },
+      ],
+    });
+    state.initDefaults(specData.blocks);
+    const context = state.createContext(() => makeEl() as unknown as HTMLElement);
+    const scatterEl = renderPlot(specData.blocks[1] as Extract<typeof specData.blocks[number], { kind: "plot" }>, context) as unknown as MockEl;
+    const pieEl = renderPlot(specData.blocks[2] as Extract<typeof specData.blocks[number], { kind: "plot" }>, context) as unknown as MockEl;
+    const barEl = renderPlot(specData.blocks[3] as Extract<typeof specData.blocks[number], { kind: "plot" }>, context) as unknown as MockEl;
+    const bitsEl = renderBits(specData.blocks[4] as Extract<typeof specData.blocks[number], { kind: "bits" }>, context) as unknown as MockEl;
+    const actionsEl = renderActions(specData.blocks[5] as Extract<typeof specData.blocks[number], { kind: "actions" }>, context) as unknown as MockEl;
+    state.activateBindings([context]);
+    state.notifyScopeChange();
+
+    // Draggable scatter dot updates px/py via pointer drag and arrow keys
+    const dot = walk(scatterEl, (n) => n.classList.contains("draggable"))[0];
+    assert.ok(dot);
+    dot.dispatch("pointerdown", { clientX: 219, clientY: 75, pointerId: 1, stopPropagation: () => {} });
+    // left=54, right=384 (midpoint x=219 -> px=5); top=24, bottom=126 (midpoint y=75 -> py=5)
+    assert.equal(state.scope.px, 5);
+    assert.equal(state.scope.py, 5);
+    dot.dispatch("pointerup", {});
+    dot.dispatch("keydown", { key: "ArrowRight", preventDefault: () => {}, stopPropagation: () => {} });
+    assert.equal(state.scope.px, 6);
+
+    // Pie percentages & Bar value labels
+    const legendStrong = walk(pieEl, (n) => n.tagName === "strong");
+    assert.equal(legendStrong[0].textContent, "3 (75%)");
+    const barLabels = walk(barEl, (n) => n.classList.contains("iui-plot-bar-val"));
+    assert.deepEqual(barLabels.map((n) => n.textContent), ["5", "9"]);
+
+    // Bits field ranges, live formula update from px=6, and click selectVar
+    const bitBtns = walk(bitsEl, (n) => n.classList.contains("iui-bit-field"));
+    assert.equal(walk(bitBtns[0], (n) => n.classList.contains("iui-bit-range"))[0].textContent, "8");
+    assert.equal(walk(bitBtns[1], (n) => n.classList.contains("iui-bit-range"))[0].textContent, "7:0");
+    assert.equal(walk(bitBtns[1], (n) => n.classList.contains("iui-bit-value"))[0].textContent, "133");
+    bitBtns[1].click();
+    assert.equal(state.scope.part, "exp");
+
+    // play_var toggles button text, advances step, and auto-stops at max=3
+    const playBtn = walk(actionsEl, (n) => n.tagName === "button")[0];
+    assert.equal(playBtn.textContent, "Play");
+    playBtn.click();
+    assert.equal(playBtn.textContent, "Pause");
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    assert.equal(state.scope.step, 3);
+    assert.equal(playBtn.textContent, "Play");
+  } finally {
+    state.stopPlaying();
+    (globalThis as { document?: unknown }).document = previousDocument;
+    (globalThis as { DOMPoint?: unknown }).DOMPoint = previousDomPoint;
   }
 });

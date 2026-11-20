@@ -17,6 +17,7 @@ import { renderCode } from "./code.js";
 import { renderGraph } from "./graph.js";
 import { renderTable } from "./table.js";
 import { renderActions } from "./actions.js";
+import { renderBits } from "./bits.js";
 import { renderBox, renderDivider, renderIcon, renderInlineAtom } from "./atoms.js";
 
 const registry: { [K in BlockKind]: BlockRenderer<K> } = {
@@ -28,6 +29,7 @@ const registry: { [K in BlockKind]: BlockRenderer<K> } = {
   architecture: renderArchitecture,
   callout: renderCallout,
   actions: renderActions,
+  bits: renderBits,
   grid: renderGrid,
   tabs: renderTabs,
   accordion: renderAccordion,

@@ -7,7 +7,9 @@ import {
   ToggleControlSchema,
 } from "./uiSpec.js";
 import { AtomicLeafBlockSchema } from "./atoms.js";
-import { CodeBlockSchema, StatItemSchema, StatsBlockSchema, TimelineBlockSchema, TimelineStepSchema } from "./content.js";
+import {
+  BitFieldSchema, BitsBlockSchema, CodeBlockSchema, StatItemSchema, StatsBlockSchema, TimelineBlockSchema, TimelineStepSchema,
+} from "./content.js";
 import { GraphBlockSchema, GraphEdgeSchema, GraphNodeSchema } from "./graph.js";
 import { TableBlockSchema, TableColumnSchema, TableRowSchema } from "./table.js";
 import { CurveSeriesSchema, PlotBlockSchema, PlotPointSchema, SvgBlockSchema, SvgElementSchema } from "./vector.js";
@@ -71,6 +73,8 @@ const examples: Record<string, string> = {
   component: '<component label="Compiler" role="Validator"/>',
   callout: '<callout title="Note" tone="info">Details here</callout>',
   code: '<code language="ts">const x = 1;</code>',
+  bits: '<bits><field label="Sign" bits={1} value="0" tone="warn"/><field label="Exponent" bits={8} value="127"/><field label="Mantissa" bits={23} value="0"/></bits>',
+  field: '<field label="Sign" bits={1} value="0"/>',
   var: '<var id="double_n" formula={n * 2}/>',
   actions: '<actions><button action="step_var" label="Next" var="n" delta={1}/></actions>',
   button: '<button action="send_message" label="Apply" promptTemplate="Apply choice"/>',
@@ -131,11 +135,13 @@ const tags = new Map<string, MarkupTag>([
   ["component", { schema: ArchitectureNodeSchema }],
   ["callout", { schema: CalloutBlockSchema, block: true, body: "literal" }],
   ["code", { schema: CodeBlockSchema, block: true, body: "code" }],
+  ["bits", { schema: BitsBlockSchema, block: true, list: [{ tag: "field", field: "fields" }] }],
+  ["field", { schema: BitFieldSchema }],
   ["var", { schema: DerivedVarSchema }],
   ["actions", { schema: ActionsBlockSchema, block: true, list: [{ tag: "button", field: "buttons" }] }],
   ["frame", { schema: z.object({ title: z.string().optional(), subtitle: z.string().optional(), badge: z.string().optional() }) }],
   ["button", { schema: z.object({
-    action: z.enum(["send_message", "copy_state", "set_var", "step_var"]),
+    action: z.enum(["send_message", "copy_state", "set_var", "step_var", "play_var"]),
     label: z.string().min(1),
     promptTemplate: z.string().optional(),
     var: z.string().optional(),
@@ -144,6 +150,8 @@ const tags = new Map<string, MarkupTag>([
     min: z.number().optional(),
     max: z.number().optional(),
     wrap: z.boolean().optional(),
+    intervalMs: z.number().int().min(50).max(5000).optional(),
+    pauseLabel: z.string().optional(),
   }) }],
 ]);
 
@@ -167,7 +175,7 @@ for (const [name, tag] of tags) {
 }
 
 const controlDefaulted = new Set(["min", "max", "defaultValue"]);
-export const autoIdTags = new Set(["tab", "section", "choice", "item", "component", "node", "step"]);
+export const autoIdTags = new Set(["tab", "section", "choice", "item", "component", "node", "step", "field"]);
 
 /** Summarizes valid attributes, required fields, and a minimal example for an element tag. */
 export function tagUsageHint(name: string, tag: MarkupTag): string {

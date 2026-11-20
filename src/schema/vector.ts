@@ -4,8 +4,10 @@ export const PlotPointSchema = z.strictObject({
   label: z.string(),
   x: z.number().optional(),
   xFormula: z.string().optional(),
+  xVar: z.string().regex(/^[A-Za-z_]\w*$/).optional(),
   y: z.number().optional(),
   yFormula: z.string().optional(),
+  yVar: z.string().regex(/^[A-Za-z_]\w*$/).optional(),
   value: z.number().optional(),
   formula: z.string().optional(),
   tone: z.enum(["primary", "accent", "success", "warn"]).optional(),
@@ -22,7 +24,7 @@ export const PlotBlockSchema = z.object({
   kind: z.literal("plot"),
   id: z.string().optional(),
   title: z.string().optional(),
-  mode: z.enum(["line", "donut", "bar"]),
+  mode: z.enum(["line", "pie", "donut", "bar", "scatter"]),
   precision: z.number().int().min(0).max(6).optional(),
   points: z.array(PlotPointSchema).min(1).optional(),
   curves: z.array(CurveSeriesSchema).min(1).optional(),
@@ -42,8 +44,8 @@ export const PlotBlockSchema = z.object({
   centerFormula: z.string().optional(),
 }).refine((block) => Boolean(block.points?.length) || Boolean(block.curves?.length), {
   message: "Plot needs points or curves",
-}).refine((block) => !block.curves || block.mode === "line", {
-  message: "Curves are only supported in line mode",
+}).refine((block) => !block.curves || block.mode === "line" || block.mode === "scatter", {
+  message: "Curves are only supported in line or scatter mode",
 }).refine((block) => !block.curves || (block.xMin !== undefined && block.xMax !== undefined && block.xMin < block.xMax), {
   message: "Curves need xMin < xMax",
 }).refine((block) => block.yMin === undefined || block.yMax === undefined || block.yMin < block.yMax, {

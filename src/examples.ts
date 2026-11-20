@@ -74,6 +74,14 @@ return emit(ir);</code>
   <stat label="Current stage" formula={stage} tone="accent"/>
 </stats>`,
   },
+  ieee754: {
+    title: "IEEE 754 single-precision float (32-bit)",
+    markup: `<bits selectVar="part">
+  <field id="sign" label="Sign" bits={1} value="0" tone="warn" detail="1 bit: 0 = positive, 1 = negative"/>
+  <field id="exp" label="Exponent" bits={8} value="127 (bias 127)" tone="primary" detail="8 bits: unbiased exponent = raw - 127"/>
+  <field id="frac" label="Mantissa" bits={23} value="0.5 (1.5 × 2^0)" tone="success" detail="23 bits: fractional precision with implicit leading 1"/>
+</bits>`,
+  },
 };
 
 export const SVG_EXAMPLES: Record<string, UiSpec> = {
